@@ -7,10 +7,9 @@ pub const JWT_SECRET: &str = "your_secret_key_for_jwt_validation_and_signing";
 
 // クレデンシャル発行者の情報
 pub const CREDENTIAL_ISSUER: &str = "https://example.com";
-pub const _CREDENTIAL_ENDPOINT: &str = "https://example.com/credential";
 
 // サポートされているクレデンシャルフォーマット
-pub const _SUPPORTED_FORMATS: [&str; 2] = ["jwt_vc_json", "ldp_vc"];
+pub const SUPPORTED_FORMATS: [&str; 2] = ["jwt_vc_json", "sd_jwt_vc"];
 
 // ノンスの有効期限（秒）
 pub const NONCE_EXPIRATION: u64 = 300; // 5分

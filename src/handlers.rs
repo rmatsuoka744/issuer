@@ -1,10 +1,15 @@
-use crate::models::{CredentialRequest, CredentialResponse, ErrorResponse, IssuerMetadata};
+use crate::models::{
+    CombinedCredentialResponse, CredentialRequest, CredentialResponse, ErrorResponse,
+    IssuerMetadata,
+};
 use crate::services::{
-    generate_credential, generate_nonce, validate_access_token, validate_request,
-    verify_proof_of_possession,
+    generate_credential, generate_nonce, generate_sd_jwt_vc, validate_access_token,
+    validate_request, verify_proof_of_possession,
 };
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use log::{debug, info};
+
+// handlers.rs
 
 #[post("/credential")]
 pub async fn credential_endpoint(
@@ -40,15 +45,34 @@ pub async fn credential_endpoint(
         ));
     }
 
-    let credential = generate_credential(&body);
-    let (c_nonce, c_nonce_expires_in) = generate_nonce();
-
-    let response = CredentialResponse {
-        format: body.format.clone(),
-        credential,
-        c_nonce,
-        c_nonce_expires_in,
+    let mut response = CombinedCredentialResponse {
+        w3c_vc: None,
+        sd_jwt_vc: None,
     };
+
+    for format in &body.formats {
+        match format.as_str() {
+            "jwt_vc_json" => {
+                let credential = generate_credential(&body);
+                let (c_nonce, c_nonce_expires_in) = generate_nonce();
+                response.w3c_vc = Some(CredentialResponse {
+                    format: "jwt_vc_json".to_string(),
+                    credential,
+                    c_nonce,
+                    c_nonce_expires_in,
+                });
+            }
+            "sd_jwt_vc" => {
+                response.sd_jwt_vc = Some(generate_sd_jwt_vc(&body));
+            }
+            _ => {
+                return HttpResponse::BadRequest().json(ErrorResponse::new(
+                    "unsupported_format",
+                    &format!("Unsupported format: {}", format),
+                ));
+            }
+        }
+    }
 
     info!("Credential endpoint: Successfully processed request");
     HttpResponse::Ok().json(response)

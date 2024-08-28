@@ -2,6 +2,7 @@ mod config;
 mod handlers;
 mod models;
 mod services;
+mod user_data;
 
 use actix_web::{App, HttpServer};
 use log::info;
@@ -21,7 +22,7 @@ curl -X POST http://localhost:8080/credential \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {}" \
   -d '{{
-    "format": "jwt_vc_json",
+    "formats": ["jwt_vc_json", "sd_jwt_vc"],
     "types": ["VerifiableCredential", "UniversityDegreeCredential"],
     "proof": {{
       "proof_type": "jwt",

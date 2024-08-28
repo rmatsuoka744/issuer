@@ -1,8 +1,9 @@
+use crate::config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug)]
 pub struct CredentialRequest {
-    pub format: String,
+    pub formats: Vec<String>,
     pub types: Vec<String>,
     pub proof: Proof,
 }
@@ -19,6 +20,19 @@ pub struct CredentialResponse {
     pub credential: String,
     pub c_nonce: String,
     pub c_nonce_expires_in: u64,
+}
+
+#[derive(Serialize)]
+pub struct SDJWTVerifiableCredential {
+    pub sd_jwt: String,
+    pub disclosures: Vec<String>,
+    pub key_binding_jwt: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct CombinedCredentialResponse {
+    pub w3c_vc: Option<CredentialResponse>,
+    pub sd_jwt_vc: Option<SDJWTVerifiableCredential>,
 }
 
 #[derive(Serialize)]
@@ -52,15 +66,18 @@ pub struct CredentialMetadata {
 impl Default for IssuerMetadata {
     fn default() -> Self {
         Self {
-            credential_issuer: "https://example.com".to_string(),
-            credential_endpoint: "https://example.com/credential".to_string(),
-            credentials_supported: vec![CredentialMetadata {
-                format: "jwt_vc_json".to_string(),
-                types: vec![
-                    "VerifiableCredential".to_string(),
-                    "UniversityDegreeCredential".to_string(),
-                ],
-            }],
+            credential_issuer: config::CREDENTIAL_ISSUER.to_string(),
+            credential_endpoint: format!("{}/credential", config::CREDENTIAL_ISSUER),
+            credentials_supported: config::SUPPORTED_FORMATS
+                .iter()
+                .map(|&format| CredentialMetadata {
+                    format: format.to_string(),
+                    types: vec![
+                        "VerifiableCredential".to_string(),
+                        "UniversityDegreeCredential".to_string(),
+                    ],
+                })
+                .collect(),
         }
     }
 }
