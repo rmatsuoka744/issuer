@@ -69,18 +69,28 @@
 - **メソッド**: GET
 - **説明**: クレデンシャル発行者に関するメタデータを提供します
 - **レスポンス形式**:
-  ```json
-  {
+```json
+{
     "credential_issuer": "https://example.com",
     "credential_endpoint": "https://example.com/credential",
     "credentials_supported": [
-      {
-        "format": "jwt_vc_json",
-        "types": ["VerifiableCredential", "UniversityDegreeCredential"]
-      }
+        {
+            "format": "jwt_vc_json",
+            "types": [
+                "VerifiableCredential",
+                "UniversityDegreeCredential"
+            ]
+        },
+        {
+            "format": "sd_jwt_vc",
+            "types": [
+                "VerifiableCredential",
+                "UniversityDegreeCredential"
+            ]
+        }
     ]
-  }
-  ```
+}
+```
 
 ## セットアップと実行方法
 
