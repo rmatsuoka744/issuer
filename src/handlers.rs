@@ -1,10 +1,16 @@
-use actix_web::{post, get, web, HttpRequest, HttpResponse, Responder};
-use log::{debug, info};
 use crate::models::{CredentialRequest, CredentialResponse, ErrorResponse, IssuerMetadata};
-use crate::services::{validate_access_token, validate_request, verify_proof_of_possession, generate_credential, generate_nonce};
+use crate::services::{
+    generate_credential, generate_nonce, validate_access_token, validate_request,
+    verify_proof_of_possession,
+};
+use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
+use log::{debug, info};
 
 #[post("/credential")]
-pub async fn credential_endpoint(req: HttpRequest, body: web::Json<CredentialRequest>) -> impl Responder {
+pub async fn credential_endpoint(
+    req: HttpRequest,
+    body: web::Json<CredentialRequest>,
+) -> impl Responder {
     info!("Credential endpoint called");
     debug!("Received credential request: {:?}", body);
 
@@ -14,15 +20,24 @@ pub async fn credential_endpoint(req: HttpRequest, body: web::Json<CredentialReq
     };
 
     if !validate_access_token(&token) {
-        return HttpResponse::Unauthorized().json(ErrorResponse::new("invalid_token", "The access token is invalid"));
+        return HttpResponse::Unauthorized().json(ErrorResponse::new(
+            "invalid_token",
+            "The access token is invalid",
+        ));
     }
 
     if !validate_request(&body) {
-        return HttpResponse::BadRequest().json(ErrorResponse::new("invalid_request", "The request is missing a required parameter"));
+        return HttpResponse::BadRequest().json(ErrorResponse::new(
+            "invalid_request",
+            "The request is missing a required parameter",
+        ));
     }
 
     if !verify_proof_of_possession(&body.proof) {
-        return HttpResponse::BadRequest().json(ErrorResponse::new("invalid_proof", "The proof of possession is invalid"));
+        return HttpResponse::BadRequest().json(ErrorResponse::new(
+            "invalid_proof",
+            "The proof of possession is invalid",
+        ));
     }
 
     let credential = generate_credential(&body);
@@ -54,9 +69,15 @@ fn extract_token(req: &HttpRequest) -> Result<String, HttpResponse> {
             if auth_str.starts_with("Bearer ") {
                 Ok(auth_str[7..].to_string())
             } else {
-                Err(HttpResponse::Unauthorized().json(ErrorResponse::new("invalid_token", "Invalid Authorization header format")))
+                Err(HttpResponse::Unauthorized().json(ErrorResponse::new(
+                    "invalid_token",
+                    "Invalid Authorization header format",
+                )))
             }
-        },
-        None => Err(HttpResponse::Unauthorized().json(ErrorResponse::new("invalid_token", "Missing Authorization header"))),
+        }
+        None => Err(HttpResponse::Unauthorized().json(ErrorResponse::new(
+            "invalid_token",
+            "Missing Authorization header",
+        ))),
     }
 }

@@ -1,9 +1,9 @@
-use log::{debug, info, error};
-use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm, encode, EncodingKey, Header};
-use chrono::{Utc, Duration};
-use uuid::Uuid;
-use crate::models::{CredentialRequest, Proof};
 use crate::config;
+use crate::models::{CredentialRequest, Proof};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use log::{debug, error, info};
+use uuid::Uuid;
 
 // テスト用のアクセストークン、JWTを生成する関数
 pub fn generate_test_access_token() -> String {
@@ -17,8 +17,9 @@ pub fn generate_test_access_token() -> String {
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(crate::config::JWT_SECRET.as_ref())
-    ).expect("Failed to generate test access token")
+        &EncodingKey::from_secret(crate::config::JWT_SECRET.as_ref()),
+    )
+    .expect("Failed to generate test access token")
 }
 
 pub fn generate_test_proof_jwt() -> String {
@@ -32,15 +33,16 @@ pub fn generate_test_proof_jwt() -> String {
     encode(
         &Header::new(Algorithm::HS256),
         &claims,
-        &EncodingKey::from_secret(config::JWT_SECRET.as_ref())
-    ).expect("Failed to generate test proof JWT")
+        &EncodingKey::from_secret(config::JWT_SECRET.as_ref()),
+    )
+    .expect("Failed to generate test proof JWT")
 }
 
 pub fn validate_access_token(token: &str) -> bool {
     info!("Validating access token");
     let decoding_key = DecodingKey::from_secret(config::JWT_SECRET.as_ref());
     let validation = Validation::new(Algorithm::HS256);
-    
+
     match decode::<serde_json::Value>(token, &decoding_key, &validation) {
         Ok(token_data) => {
             debug!("Token successfully decoded: {:?}", token_data.claims);
@@ -52,7 +54,7 @@ pub fn validate_access_token(token: &str) -> bool {
             }
             error!("Token does not have required scope");
             false
-        },
+        }
         Err(err) => {
             error!("Token validation failed: {}", err);
             false
@@ -95,7 +97,7 @@ pub fn verify_proof_of_possession(proof: &Proof) -> bool {
             }
             error!("Invalid or missing nonce in proof");
             false
-        },
+        }
         Err(err) => {
             error!("Proof JWT validation failed: {}", err);
             false
@@ -127,8 +129,9 @@ pub fn generate_credential(req: &CredentialRequest) -> String {
     let encoded = jsonwebtoken::encode(
         &jsonwebtoken::Header::new(Algorithm::HS256),
         &credential,
-        &jsonwebtoken::EncodingKey::from_secret(config::JWT_SECRET.as_ref())
-    ).expect("Failed to encode credential");
+        &jsonwebtoken::EncodingKey::from_secret(config::JWT_SECRET.as_ref()),
+    )
+    .expect("Failed to encode credential");
 
     info!("Credential generated successfully");
     encoded

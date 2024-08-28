@@ -54,12 +54,13 @@ impl Default for IssuerMetadata {
         Self {
             credential_issuer: "https://example.com".to_string(),
             credential_endpoint: "https://example.com/credential".to_string(),
-            credentials_supported: vec![
-                CredentialMetadata {
-                    format: "jwt_vc_json".to_string(),
-                    types: vec!["VerifiableCredential".to_string(), "UniversityDegreeCredential".to_string()],
-                },
-            ],
+            credentials_supported: vec![CredentialMetadata {
+                format: "jwt_vc_json".to_string(),
+                types: vec![
+                    "VerifiableCredential".to_string(),
+                    "UniversityDegreeCredential".to_string(),
+                ],
+            }],
         }
     }
 }

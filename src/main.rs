@@ -1,7 +1,7 @@
+mod config;
 mod handlers;
 mod models;
 mod services;
-mod config;
 
 use actix_web::{App, HttpServer};
 use log::info;
@@ -15,7 +15,8 @@ async fn main() -> std::io::Result<()> {
     let test_proof_jwt = services::generate_test_proof_jwt();
     info!("Test Access Token: {}", test_token);
     info!("Test Proof JWT: {}", test_proof_jwt);
-    info!(r#"Test curl command:
+    info!(
+        r#"Test curl command:
 curl -X POST http://localhost:8080/credential \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {}" \
@@ -26,7 +27,9 @@ curl -X POST http://localhost:8080/credential \
       "proof_type": "jwt",
       "jwt": "{}"
     }}
-  }}'"#, test_token, test_proof_jwt);
+  }}'"#,
+        test_token, test_proof_jwt
+    );
 
     HttpServer::new(|| {
         App::new()
