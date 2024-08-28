@@ -25,25 +25,43 @@
 - **メソッド**: POST
 - **説明**: 提供されたリクエストに基づいてVerifiable Credentialを発行します.`[INFO  Issuer] Test curl command:`以降をコピペすることでAPIのテストが可能です.
 - **リクエスト形式**:
-  ```json
-  {
-    "format": "jwt_vc_json",
-    "types": ["VerifiableCredential", "UniversityDegreeCredential"],
-    "proof": {
+```json
+{
+  "formats": [
+      "jwt_vc_json",
+      "sd_jwt_vc"
+  ],
+  "types": [
+      "VerifiableCredential",
+      "UniversityDegreeCredential"
+  ],
+  "proof": {
       "proof_type": "jwt",
-      "jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-    }
+      "jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3MjQ4MzU2MzcsImlhdCI6MTcyNDgzMjAzNywibm9uY2UiOiJ0ZXN0X25vbmNlIn0.qV1zwmccUVhfVL-XTDhdDVlcxcJWPt8tdlhxoRAvtmw"
   }
-  ```
+}
+```
 - **レスポンス形式**:
-  ```json
-  {
-    "format": "jwt_vc_json",
-    "credential": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-    "c_nonce": "1234567890",
-    "c_nonce_expires_in": 300
-  }
-  ```
+```json
+{
+    "w3c_vc": {
+        "format": "jwt_vc_json",
+        "credential": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3MjQ5MTg0NDgsImlhdCI6MTcyNDgzMjA0OCwiaXNzIjoiaHR0cHM6Ly9leGFtcGxlLmNvbSIsInN1YiI6IjUzMjFiZjc1LWMxMWMtNGUwYS05YjI5LTBkNjhhMWRhM2FlMCIsInZjIjp7IkBjb250ZXh0IjpbImh0dHBzOi8vd3d3LnczLm9yZy8yMDE4L2NyZWRlbnRpYWxzL3YxIiwiaHR0cHM6Ly93d3cudzMub3JnLzIwMTgvY3JlZGVudGlhbHMvZXhhbXBsZXMvdjEiXSwiY3JlZGVudGlhbFN1YmplY3QiOnsiYWRkcmVzcyI6eyJjb3VudHJ5IjoiVVMiLCJsb2NhbGl0eSI6IkFueXRvd24iLCJyZWdpb24iOiJTdGF0ZSIsInN0cmVldF9hZGRyZXNzIjoiMTIzIE1haW4gU3QifSwiYmlydGhkYXRlIjoiMTk5MC0wMS0wMSIsImVtYWlsIjoiam9obmRvZUBleGFtcGxlLmNvbSIsImZhbWlseV9uYW1lIjoiRG9lIiwiZ2l2ZW5fbmFtZSI6IkpvaG4ifSwidHlwZSI6WyJWZXJpZmlhYmxlQ3JlZGVudGlhbCIsIlVuaXZlcnNpdHlEZWdyZWVDcmVkZW50aWFsIl19fQ.CIPdyzsCNFWZPkG4EWtlvaWsyTLR7owyIsaMOkXTGbI",
+        "c_nonce": "15e95109-9268-40d4-bba5-90331248610c",
+        "c_nonce_expires_in": 300
+    },
+    "sd_jwt_vc": {
+        "sd_jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJiaXJ0aGRhdGUiOiI1dUJuOV8ycXJtQWpIOUxrRGgzZGJueHZMM3JMaTBvTkFBb1B3VmIwREZ3IiwiZW1haWwiOiJqTXJQSGcwQXZ1eTFxbDl2R1JPNzhSNWx4ZFVjdkcxTXhlanFockl2ckVNIiwiZXhwIjoxNzI0OTE4NDQ4LCJmYW1pbHlfbmFtZSI6IkdLcXpNN19DcG9NSnY5QnF1SFNPQ0IyTndCUGNwekFPb2U5ZmRveHZsa28iLCJnaXZlbl9uYW1lIjoidzlrb1B4aldVNWd6N3h0Z3VNWGdfaEhXNnFVZUo1UnlYR2R0Y0xpR1JGRSIsImlhdCI6MTcyNDgzMjA0OCwiaXNzIjoiaHR0cHM6Ly9leGFtcGxlLmNvbSIsInN1YiI6IjM4ZTU3ZTU0LWRlMDgtNGE5Zi1hOWY1LTI3NzI5NjZlMGNiOCIsInZjIjp7IkBjb250ZXh0IjpbImh0dHBzOi8vd3d3LnczLm9yZy8yMDE4L2NyZWRlbnRpYWxzL3YxIiwiaHR0cHM6Ly93d3cudzMub3JnLzIwMTgvY3JlZGVudGlhbHMvZXhhbXBsZXMvdjEiXSwidHlwZSI6WyJWZXJpZmlhYmxlQ3JlZGVudGlhbCIsIlVuaXZlcnNpdHlEZWdyZWVDcmVkZW50aWFsIl19fQ.DTE-xM_-9zOF1ZTzBenQVuEd_pIp4kSlbAjrGYklzwg",
+        "disclosures": [
+            "W2IzZDBmNTM2LTAxODgtNDIwMS1hN2ExLTU4NWZkZWYwODBhZiwgYmlydGhkYXRlLCAxOTkwLTAxLTAxXQ",
+            "WzU0MGU2OTZiLTJjMDMtNDA2YS05MzNhLWEyYTJlM2IzYzNjOSwgZW1haWwsIGpvaG5kb2VAZXhhbXBsZS5jb21d",
+            "W2FiOGE1M2MzLTUzNjEtNDE5OS1hMDJhLTQ4YmIzMzI5N2U2YSwgZmFtaWx5X25hbWUsIERvZV0",
+            "WzVkMTdlNTljLWQxNjQtNGIxMC04MjM5LWExNjk4NWU5ZmViMiwgZ2l2ZW5fbmFtZSwgSm9obl0"
+        ],
+        "key_binding_jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MjQ4MzIwNDgsIm5vbmNlIjoiMWE0MmJmNmYtZjEzMy00ZmJhLTkwODMtNWE2ZjczMjkzZmI5In0.lmY91nfy4i-uScM5V9HC-HJSfaxz7z19PV8347lsFKg"
+    }
+}
+```
 
 ### 2. メタデータエンドポイント
 
