@@ -7,7 +7,7 @@ use crate::services::{
     validate_request, verify_proof_of_possession,
 };
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
-use log::{debug, info};
+use log::{debug, info, error};
 
 // handlers.rs
 
@@ -63,7 +63,18 @@ pub async fn credential_endpoint(
                 });
             }
             "sd_jwt_vc" => {
-                response.sd_jwt_vc = Some(generate_sd_jwt_vc(&body));
+                match generate_sd_jwt_vc(&body) {
+                    Ok(sd_jwt_vc) => {
+                        response.sd_jwt_vc = Some(sd_jwt_vc);
+                    },
+                    Err(err) => {
+                        error!("Failed to generate SD-JWT-VC: {}", err);
+                        return HttpResponse::InternalServerError().json(ErrorResponse::new(
+                            "server_error",
+                            "Failed to generate SD-JWT-VC",
+                        ));
+                    }
+                }
             }
             _ => {
                 return HttpResponse::BadRequest().json(ErrorResponse::new(

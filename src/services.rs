@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 // テスト用の関数
 pub fn generate_test_access_token() -> String {
+    info!("Generate test access token");
     let expiration = Utc::now() + Duration::hours(1);
     let claims = serde_json::json!({
         "sub": "test_user",
@@ -26,6 +27,7 @@ pub fn generate_test_access_token() -> String {
 }
 
 pub fn generate_test_proof_jwt() -> String {
+    info!("Generate test proof jwt");
     let expiration = Utc::now() + Duration::hours(1);
     let claims = serde_json::json!({
         "nonce": "test_nonce",
@@ -90,13 +92,11 @@ pub fn validate_request(req: &CredentialRequest) -> bool {
 
 pub fn verify_proof_of_possession(proof: &Proof) -> bool {
     info!("Verifying proof of possession");
-    let decoding_key = DecodingKey::from_secret(config::JWT_SECRET.as_ref());
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = false;
-    match decode::<Value>(&proof.jwt, &decoding_key, &validation) {
-        Ok(token_data) => {
-            debug!("Proof JWT successfully decoded: {:?}", token_data.claims);
-            if let Some(nonce) = token_data.claims.get("nonce") {
+
+    match verify_jwt(&proof.jwt) {
+        Ok(claims) => {
+            debug!("Proof JWT successfully verified: {:?}", claims);
+            if let Some(nonce) = claims.get("nonce") {
                 if verify_nonce(nonce.as_str().unwrap_or("")) {
                     info!("Proof of possession verification successful");
                     return true;
@@ -106,7 +106,7 @@ pub fn verify_proof_of_possession(proof: &Proof) -> bool {
             false
         }
         Err(err) => {
-            error!("Proof JWT validation failed: {}", err);
+            error!("Proof JWT verification failed: {}", err);
             false
         }
     }
@@ -178,7 +178,7 @@ fn store_nonce(nonce: &str, _expires_in: u64) {
 }
 
 // SD-JWT関連の関数
-pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> SDJWTVerifiableCredential {
+pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCredential, String> {
     info!("Generating SD-JWT VC");
     let now = Utc::now();
     let claims = serde_json::json!({
@@ -207,10 +207,21 @@ pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> SDJWTVerifiableCredential 
 
     let key_binding_jwt = generate_key_binding_jwt();
 
-    SDJWTVerifiableCredential {
-        sd_jwt,
-        disclosures,
-        key_binding_jwt: Some(key_binding_jwt),
+    // SD-JWT-VCの検証
+    match verify_sd_jwt(&sd_jwt) {
+        Ok(_) => {
+            // 検証成功
+            Ok(SDJWTVerifiableCredential {
+                sd_jwt,
+                disclosures,
+                key_binding_jwt: Some(key_binding_jwt),
+            })
+        },
+        Err(err) => {
+            // 検証失敗
+            error!("SD-JWT-VC verification failed: {}", err);
+            Err(err)
+        }
     }
 }
 
@@ -251,6 +262,7 @@ fn hash_disclosure(disclosure: &str) -> String {
 }
 
 pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
+    info!("Verify SD-JWT");
     let parts: Vec<&str> = sd_jwt.split('.').collect();
     if parts.len() < 2 {
         return Err("Invalid SD-JWT format".to_string());
@@ -264,7 +276,7 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
             .map_err(|_| "Invalid disclosure encoding".to_string())?;
         let disclosure_json: Value = serde_json::from_slice(&decoded)
             .map_err(|_| "Invalid disclosure format".to_string())?;
-        if let (Some(salt), Some(key), Some(value)) = (
+        if let (Some(_salt), Some(key), Some(value)) = (
             disclosure_json.get(0),
             disclosure_json.get(1),
             disclosure_json.get(2),
