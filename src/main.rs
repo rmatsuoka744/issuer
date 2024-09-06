@@ -36,6 +36,7 @@ curl -X POST http://localhost:8080/credential \
         App::new()
             .service(handlers::credential_endpoint)
             .service(handlers::metadata_endpoint)
+            .service(handlers::token_endpoint)
     })
     .bind(config::SERVER_ADDRESS)?
     .run()

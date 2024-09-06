@@ -81,3 +81,23 @@ impl Default for IssuerMetadata {
         }
     }
 }
+
+
+
+#[derive(Deserialize, Debug)]
+pub struct TokenRequest {
+    pub grant_type: String,
+    pub client_id: String,
+    pub client_secret: String,
+    pub scope: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: u64,
+    pub scope: String,
+    pub c_nonce: String,
+    pub c_nonce_expires_in: u64,
+}

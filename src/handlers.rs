@@ -1,10 +1,10 @@
 use crate::models::{
     CombinedCredentialResponse, CredentialRequest, CredentialResponse, ErrorResponse,
-    IssuerMetadata,
+    IssuerMetadata, TokenRequest,
 };
 use crate::services::{
     generate_credential, generate_nonce, generate_sd_jwt_vc, validate_access_token,
-    validate_request, verify_proof_of_possession,
+    validate_request, verify_proof_of_possession, authenticate_client, validate_grant_type, generate_access_token
 };
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use log::{debug, info, error};
@@ -114,5 +114,35 @@ fn extract_token(req: &HttpRequest) -> Result<String, HttpResponse> {
             "invalid_token",
             "Missing Authorization header",
         ))),
+    }
+}
+
+
+
+#[post("/token")]
+async fn token_endpoint(req: HttpRequest, body: web::Json<TokenRequest>) -> impl Responder {
+    info!("Token endpoint called");
+    debug!("Received token request: {:?}", body);
+
+    if !authenticate_client(&body.client_id, &body.client_secret) {
+        return HttpResponse::Unauthorized().json(ErrorResponse::new(
+            "invalid_client",
+            "Client authentication failed",
+        ));
+    }
+
+    if !validate_grant_type(&body.grant_type) {
+        return HttpResponse::BadRequest().json(ErrorResponse::new(
+            "unsupported_grant_type",
+            "Unsupported grant type",
+        ));
+    }
+
+    match generate_access_token(&body.client_id, body.scope.as_deref()) {
+        Ok(token_response) => HttpResponse::Ok().json(token_response),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse::new(
+            "server_error",
+            &e.to_string(),
+        )),
     }
 }

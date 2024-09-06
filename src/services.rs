@@ -1,5 +1,5 @@
 use crate::config;
-use crate::models::{CredentialRequest, Proof, SDJWTVerifiableCredential};
+use crate::models::{CredentialRequest, Proof, SDJWTVerifiableCredential, TokenResponse};
 use crate::user_data::USER_DATA;
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
@@ -288,4 +288,43 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
         }
     }
     Ok(claims)
+}
+
+pub fn authenticate_client(client_id: &str, client_secret: &str) -> bool {
+    // 実際の実装ではデータベースなどで検証する
+    client_id == "your_client_id" && client_secret == "your_client_secret"
+}
+
+pub fn validate_grant_type(grant_type: &str) -> bool {
+    grant_type == "client_credentials"
+}
+
+pub fn generate_access_token(client_id: &str, scope: Option<&str>) -> Result<TokenResponse, String> {
+    let now = Utc::now();
+    let expires_in = Duration::hours(1);
+    let scope = scope.unwrap_or("credential_issue").to_string();
+
+    let claims = serde_json::json!({
+        "iss": "https://example.com",
+        "sub": client_id,
+        "aud": "https://api.example.com",
+        "exp": (now + expires_in).timestamp(),
+        "iat": now.timestamp(),
+        "scope": scope,
+    });
+
+    let access_token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(config::JWT_SECRET.as_ref())
+    ).map_err(|e| e.to_string())?;
+
+    Ok(TokenResponse {
+        access_token,
+        token_type: "Bearer".to_string(),
+        expires_in: expires_in.num_seconds() as u64,
+        scope,
+        c_nonce: Uuid::new_v4().to_string(),
+        c_nonce_expires_in: 300, // 5分
+    })
 }
