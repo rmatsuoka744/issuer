@@ -120,7 +120,7 @@ fn extract_token(req: &HttpRequest) -> Result<String, HttpResponse> {
 
 
 #[post("/token")]
-async fn token_endpoint(req: HttpRequest, body: web::Json<TokenRequest>) -> impl Responder {
+async fn token_endpoint(_req: HttpRequest, body: web::Json<TokenRequest>) -> impl Responder {
     info!("Token endpoint called");
     debug!("Received token request: {:?}", body);
 

@@ -92,6 +92,33 @@
 }
 ```
 
+### 2. アクセストークン発行エンドポイント
+
+- **URL**: `/token`
+- **メソッド**: POST
+- **説明**: 提供されたリクエストに基づいてAccess Tokenを発行します.
+- **リクエスト形式**:
+```json
+{
+    "grant_type": "client_credentials",
+    "client_id": "your_client_id",
+    "client_secret": "your_client_secret",
+    "scope": "credential_issue"
+}
+```
+
+- **レスポンス形式**:
+```json
+{
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJodHRwczovL2FwaS5leGFtcGxlLmNvbSIsImV4cCI6MTcyNTYwNzIxMiwiaWF0IjoxNzI1NjAzNjEyLCJpc3MiOiJodHRwczovL2V4YW1wbGUuY29tIiwic2NvcGUiOiJjcmVkZW50aWFsX2lzc3VlIiwic3ViIjoieW91cl9jbGllbnRfaWQifQ.nFhZPR7nUMjbRPsHual47fY6W0wVXH-CNtTPSiya6R8",
+    "token_type": "Bearer",
+    "expires_in": 3600,
+    "scope": "credential_issue",
+    "c_nonce": "baf22316-ee32-41c7-81a5-b6cf52515cc9",
+    "c_nonce_expires_in": 300
+}
+```
+
 ## セットアップと実行方法
 
 1. RustとCargoがインストールされていることを確認してください

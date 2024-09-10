@@ -319,6 +319,8 @@ pub fn generate_access_token(client_id: &str, scope: Option<&str>) -> Result<Tok
         &EncodingKey::from_secret(config::JWT_SECRET.as_ref())
     ).map_err(|e| e.to_string())?;
 
+    debug!("Access Token: {}", access_token);
+
     Ok(TokenResponse {
         access_token,
         token_type: "Bearer".to_string(),

@@ -18,6 +18,17 @@ async fn main() -> std::io::Result<()> {
     info!("Test Proof JWT: {}", test_proof_jwt);
     info!(
         r#"Test curl command:
+curl -X POST http://localhost:8080/token \
+  -H "Content-Type: application/json" \
+  -d '{{
+    "grant_type": "client_credentials",
+    "client_id": "your_client_id",
+    "client_secret": "your_client_secret",
+    "scope": "credential_issue"
+    }}'"#
+    );
+    info!(
+        r#"Test curl command:
 curl -X POST http://localhost:8080/credential \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {}" \
