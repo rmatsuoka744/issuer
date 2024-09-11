@@ -181,7 +181,7 @@ fn store_nonce(nonce: &str, _expires_in: u64) {
 pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCredential, String> {
     info!("Generating SD-JWT VC");
     let now = Utc::now();
-    let claims = serde_json::json!({
+    let mut claims = serde_json::json!({
         "iss": config::CREDENTIAL_ISSUER,
         "sub": Uuid::new_v4().to_string(),
         "iat": now.timestamp(),
@@ -192,25 +192,52 @@ pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCred
                 "https://www.w3.org/2018/credentials/examples/v1"
             ],
             "type": req.types.clone(),
+            "credentialSubject": {
+                "id": "did:example:ebfeb1f712ebc6f1c276e12ec21"
+            }
+        },
+        "_sd_alg": "sha-256",
+        "cnf": {
+            "jwk": {
+                "kty": "EC",
+                "crv": "P-256",
+                "x": "TCAER19Zvu3OHF4j4W4vfSVoHIP1ILilDls7vCeGemc",
+                "y": "ZxjiWWbZMQGHVWKVQ4hbSIirsVfuecCE6t4jT9F2HZQ"
+            }
         }
     });
 
-    let selective_claims: Vec<(&str, &str)> = USER_DATA
+    // USER_DATAからクレームを追加
+    let selective_claims: Vec<(&str, serde_json::Value)> = USER_DATA
         .as_object()
         .unwrap()
         .iter()
-        .filter(|(_, v)| v.is_string())
-        .map(|(k, v)| (k.as_str(), v.as_str().unwrap()))
+        .filter(|(k, _)| *k != "vct") // vctは除外
+        .map(|(k, v)| (k.as_str(), v.clone()))
         .collect();
 
-    let (sd_jwt, disclosures) = generate_sd_jwt(&claims, &selective_claims);
+    let (sd_jwt, disclosures, sd_hashes) = generate_sd_jwt(&claims, &selective_claims)?;
+    claims["_sd"] = serde_json::Value::Array(sd_hashes);
+
+    // vctをcredentialSubjectに追加
+    if let Some(vct) = USER_DATA.get("vct") {
+        claims["vc"]["credentialSubject"]["vct"] = vct.clone();
+    }
 
     let key_binding_jwt = generate_key_binding_jwt();
+
+    let header = Header {
+        typ: Some("vc+sd-jwt".to_string()),
+        alg: Algorithm::HS256,
+        ..Default::default()
+    };
+
+    let sd_jwt = encode(&header, &claims, &EncodingKey::from_secret(config::JWT_SECRET.as_ref()))
+        .map_err(|e| e.to_string())?;
 
     // SD-JWT-VCの検証
     match verify_sd_jwt(&sd_jwt) {
         Ok(_) => {
-            // 検証成功
             Ok(SDJWTVerifiableCredential {
                 sd_jwt,
                 disclosures,
@@ -218,11 +245,28 @@ pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCred
             })
         },
         Err(err) => {
-            // 検証失敗
             error!("SD-JWT-VC verification failed: {}", err);
             Err(err)
         }
     }
+}
+
+fn generate_sd_jwt(claims: &Value, selective_claims: &[(&str, serde_json::Value)]) -> Result<(String, Vec<String>, Vec<Value>), String> {
+    let mut jwt_claims = claims.clone();
+    let mut disclosures = Vec::new();
+    let mut sd_hashes = Vec::new();
+
+    for (key, value) in selective_claims {
+        let salt = generate_salt();
+        let disclosure = format!("[{}, {}, {}]", salt, key, value);
+        let encoded_disclosure = general_purpose::URL_SAFE_NO_PAD.encode(&disclosure);
+        let hash = hash_disclosure(&disclosure);
+        jwt_claims["vc"]["credentialSubject"][key] = Value::String(hash.clone());
+        disclosures.push(encoded_disclosure);
+        sd_hashes.push(Value::String(hash));
+    }
+
+    Ok((jwt_claims.to_string(), disclosures, sd_hashes))
 }
 
 fn generate_key_binding_jwt() -> String {
@@ -231,23 +275,6 @@ fn generate_key_binding_jwt() -> String {
         "nonce": generate_salt(),
     });
     generate_jwt(&claims)
-}
-
-fn generate_sd_jwt(claims: &Value, selective_claims: &[(&str, &str)]) -> (String, Vec<String>) {
-    let mut jwt_claims = claims.clone();
-    let mut disclosures = Vec::new();
-
-    for (key, value) in selective_claims {
-        let salt = generate_salt();
-        let disclosure = format!("[{}, {}, {}]", salt, key, value);
-        let encoded_disclosure = general_purpose::URL_SAFE_NO_PAD.encode(&disclosure);
-        let hash = hash_disclosure(&disclosure);
-        jwt_claims[key] = Value::String(hash);
-        disclosures.push(encoded_disclosure);
-    }
-
-    let jwt = generate_jwt(&jwt_claims);
-    (jwt, disclosures)
 }
 
 fn generate_salt() -> String {
@@ -290,6 +317,8 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
     Ok(claims)
 }
 
+
+// TokenEndpoint
 pub fn authenticate_client(client_id: &str, client_secret: &str) -> bool {
     // 実際の実装ではデータベースなどで検証する
     client_id == "your_client_id" && client_secret == "your_client_secret"

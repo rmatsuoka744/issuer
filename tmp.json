@@ -1,3 +1,4 @@
+// TokenEndpoint
 {
     "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJodHRwczovL2FwaS5leGFtcGxlLmNvbSIsImV4cCI6MTcyNTYwNzIxMiwiaWF0IjoxNzI1NjAzNjEyLCJpc3MiOiJodHRwczovL2V4YW1wbGUuY29tIiwic2NvcGUiOiJjcmVkZW50aWFsX2lzc3VlIiwic3ViIjoieW91cl9jbGllbnRfaWQifQ.nFhZPR7nUMjbRPsHual47fY6W0wVXH-CNtTPSiya6R8",
     "token_type": "Bearer",
@@ -5,4 +6,62 @@
     "scope": "credential_issue",
     "c_nonce": "baf22316-ee32-41c7-81a5-b6cf52515cc9",
     "c_nonce_expires_in": 300
+}
+// CredentialEndpoint
+{
+    "w3c_vc": {
+        "format": "jwt_vc_json",
+        "credential": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3MjYxMDc0MTEsImlhdCI6MTcyNjAyMTAxMSwiaXNzIjoiaHR0cHM6Ly9leGFtcGxlLmNvbSIsInN1YiI6ImM4ZTJjZjFlLTg5ZmYtNDY5YS1iZjBjLTRmYmQ2NjNiNzkyMSIsInZjIjp7IkBjb250ZXh0IjpbImh0dHBzOi8vd3d3LnczLm9yZy8yMDE4L2NyZWRlbnRpYWxzL3YxIiwiaHR0cHM6Ly93d3cudzMub3JnLzIwMTgvY3JlZGVudGlhbHMvZXhhbXBsZXMvdjEiXSwiY3JlZGVudGlhbFN1YmplY3QiOnsiYWRkcmVzcyI6eyJjb3VudHJ5IjoiVVMiLCJsb2NhbGl0eSI6IkFueXRvd24iLCJyZWdpb24iOiJTdGF0ZSIsInN0cmVldF9hZGRyZXNzIjoiMTIzIE1haW4gU3QifSwiYmlydGhkYXRlIjoiMTk5MC0wMS0wMSIsImVtYWlsIjoiam9obmRvZUBleGFtcGxlLmNvbSIsImZhbWlseV9uYW1lIjoiRG9lIiwiZ2l2ZW5fbmFtZSI6IkpvaG4ifSwidHlwZSI6WyJWZXJpZmlhYmxlQ3JlZGVudGlhbCIsIlVuaXZlcnNpdHlEZWdyZWVDcmVkZW50aWFsIl19fQ.MAivcbDfSTAzEUS3JeQ0j3TgOFCRJVP772HQ9uYpIhc",
+        "c_nonce": "c814afd0-228a-4475-99d6-e3392fb5e973",
+        "c_nonce_expires_in": 300
+    },
+    "sd_jwt_vc": {
+        "sd_jwt": "eyJ0eXAiOiJ2YytzZC1qd3QiLCJhbGciOiJIUzI1NiJ9.eyJfc2QiOlsidk1YZ19tUGZrWHFibU8yMFFCdXBrTUdjaWdxek9hNEw5dDlXT0RiMjJZUSIsImp5VTF6RGpDT2RrWl9YMG1PTWpjQjZOYWpmWjJPa3ltR0s1SFBlQmhKbjAiLCI5WERSekgwaTlhZWNfUTJNNFhJeHBxZEdyVmNjNVY4MjAyMkEzYUgzNWJZIiwiT3FkaE94cFRFRWUxWkZVRWNSMjRjd1dMalFweThVb3VxZ1BzYVlUbnRvVSJdLCJfc2RfYWxnIjoic2hhLTI1NiIsImNuZiI6eyJqd2siOnsiY3J2IjoiUC0yNTYiLCJrdHkiOiJFQyIsIngiOiJUQ0FFUjE5WnZ1M09IRjRqNFc0dmZTVm9ISVAxSUxpbERsczd2Q2VHZW1jIiwieSI6Ilp4amlXV2JaTVFHSFZXS1ZRNGhiU0lpcnNWZnVlY0NFNnQ0alQ5RjJIWlEifX0sImV4cCI6MTcyNjEwNzQxMSwiaWF0IjoxNzI2MDIxMDExLCJpc3MiOiJodHRwczovL2V4YW1wbGUuY29tIiwic3ViIjoiM2UxOTZlMzYtM2NjMC00ZWM1LWE5NzYtNjE0MjI4ZmI5NDc2IiwidmMiOnsiQGNvbnRleHQiOlsiaHR0cHM6Ly93d3cudzMub3JnLzIwMTgvY3JlZGVudGlhbHMvdjEiLCJodHRwczovL3d3dy53My5vcmcvMjAxOC9jcmVkZW50aWFscy9leGFtcGxlcy92MSJdLCJjcmVkZW50aWFsU3ViamVjdCI6eyJpZCI6ImRpZDpleGFtcGxlOmViZmViMWY3MTJlYmM2ZjFjMjc2ZTEyZWMyMSJ9LCJ0eXBlIjpbIlZlcmlmaWFibGVDcmVkZW50aWFsIiwiVW5pdmVyc2l0eURlZ3JlZUNyZWRlbnRpYWwiXX19.vdaYSnv8R5-elpnDhfKQ__lEVM_zS3cEJKGlMbjrby4",
+        "disclosures": [
+            "WzE2MzdlNTU3LWQ4ZTUtNDE0NS05NTcwLTg5ZTU5NDY1NGJmNywgYmlydGhkYXRlLCAxOTkwLTAxLTAxXQ",
+            "WzE2MTY2ZjMwLWFjNjQtNGQyNi04NTcyLTNiN2IzNzIwYzM5MSwgZW1haWwsIGpvaG5kb2VAZXhhbXBsZS5jb21d",
+            "W2Q0MWYwYjkxLTRhZTMtNDFjZS1iZTI5LTJmNDRlODI3NjQ1MywgZmFtaWx5X25hbWUsIERvZV0",
+            "W2RkZmFjZTc3LWE1NmYtNDA0ZS05ODZkLWNhNGRjY2RhOTgxOSwgZ2l2ZW5fbmFtZSwgSm9obl0"
+        ],
+        "key_binding_jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MjYwMjEwMTEsIm5vbmNlIjoiY2ZlODQxOGYtMzg3ZC00ODA4LWIzNjMtNmZjZTYxODVmZGQ4In0.YrRvzag8KQgzsXQWgklnh5AFRZgDRqUpqxX9N8KlHIQ"
+    }
+}
+// decode sd_jwt_vc
+{
+    "typ": "vc+sd-jwt",
+    "alg": "HS256"
+}
+{
+    "_sd": [
+        "vMXg_mPfkXqbmO20QBupkMGcigqzOa4L9t9WODb22YQ",
+        "jyU1zDjCOdkZ_X0mOMjcB6NajfZ2OkymGK5HPeBhJn0",
+        "9XDRzH0i9aec_Q2M4XIxpqdGrVcc5V82022A3aH35bY",
+        "OqdhOxpTEEe1ZFUEcR24cwWLjQpy8UouqgPsaYTntoU"
+    ],
+    "_sd_alg": "sha-256",
+    "cnf": {
+        "jwk": {
+            "crv": "P-256",
+            "kty": "EC",
+            "x": "TCAER19Zvu3OHF4j4W4vfSVoHIP1ILilDls7vCeGemc",
+            "y": "ZxjiWWbZMQGHVWKVQ4hbSIirsVfuecCE6t4jT9F2HZQ"
+        }
+    },
+    "exp": 1726107411,
+    "iat": 1726021011,
+    "iss": "https://example.com",
+    "sub": "3e196e36-3cc0-4ec5-a976-614228fb9476",
+    "vc": {
+        "@context": [
+            "https://www.w3.org/2018/credentials/v1",
+            "https://www.w3.org/2018/credentials/examples/v1"
+        ],
+        "credentialSubject": {
+            "id": "did:example:ebfeb1f712ebc6f1c276e12ec21"
+        },
+        "type": [
+            "VerifiableCredential",
+            "UniversityDegreeCredential"
+        ]
+    }
 }

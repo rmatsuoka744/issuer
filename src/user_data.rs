@@ -3,15 +3,20 @@ use serde_json::json;
 
 lazy_static! {
     pub static ref USER_DATA: serde_json::Value = json!({
-        "given_name": "John",
-        "family_name": "Doe",
-        "birthdate": "1990-01-01",
-        "email": "johndoe@example.com",
-        "address": {
-            "street_address": "123 Main St",
-            "locality": "Anytown",
-            "region": "State",
-            "country": "US"
-        }
+      "vct": "https://credentials.example.com/identity_credential",
+      "given_name": "John",
+      "family_name": "Doe",
+      "email": "johndoe@example.com",
+      "phone_number": "+1-202-555-0101",
+      "address": {
+        "street_address": "123 Main St",
+        "locality": "Anytown",
+        "region": "Anystate",
+        "country": "US"
+      },
+      "birthdate": "1940-01-01",
+      "is_over_18": true,
+      "is_over_21": true,
+      "is_over_65": true
     });
 }
