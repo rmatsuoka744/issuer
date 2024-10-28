@@ -22,8 +22,8 @@ curl -X POST http://localhost:8080/token \
   -H "Content-Type: application/json" \
   -d '{{
     "grant_type": "client_credentials",
-    "client_id": "your_client_id",
-    "client_secret": "your_client_secret",
+    "client_id": "TEST_CLIENT_ID_1",
+    "client_secret": "TEST_SECRET_1",
     "scope": "credential_issue"
     }}'"#
     );

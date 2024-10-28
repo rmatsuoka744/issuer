@@ -316,8 +316,11 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
 
 // TokenEndpoint
 pub fn authenticate_client(client_id: &str, client_secret: &str) -> bool {
-    // 実際の実装ではデータベースなどで検証する
-    client_id == "your_client_id" && client_secret == "your_client_secret"
+    if let Some(expected_secret) = config::get_client_secret(client_id) {
+        client_secret == expected_secret
+    } else {
+        false
+    }
 }
 
 pub fn validate_grant_type(grant_type: &str) -> bool {
