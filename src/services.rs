@@ -21,7 +21,7 @@ pub fn generate_test_access_token() -> String {
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(config::JWT_SECRET.as_ref()),
+        &EncodingKey::from_secret(config::ACCESS_TOKEN_SECRET.as_ref()),
     )
     .expect("Failed to generate test access token")
 }
@@ -37,7 +37,7 @@ pub fn generate_test_proof_jwt() -> String {
     encode(
         &Header::new(Algorithm::HS256),
         &claims,
-        &EncodingKey::from_secret(config::JWT_SECRET.as_ref()),
+        &EncodingKey::from_secret(config::CLIENT_SECRET.as_ref()),
     )
     .expect("Failed to generate test proof JWT")
 }
@@ -45,7 +45,7 @@ pub fn generate_test_proof_jwt() -> String {
 // 検証関数
 pub fn validate_access_token(token: &str) -> bool {
     info!("Validating access token");
-    let decoding_key = DecodingKey::from_secret(config::JWT_SECRET.as_ref());
+    let decoding_key = DecodingKey::from_secret(config::ACCESS_TOKEN_SECRET.as_ref());
     let validation = Validation::new(Algorithm::HS256);
     match decode::<Value>(token, &decoding_key, &validation) {
         Ok(token_data) => {
@@ -90,10 +90,9 @@ pub fn validate_request(req: &CredentialRequest) -> bool {
     true
 }
 
-pub fn verify_proof_of_possession(proof: &Proof) -> bool {
+pub fn verify_proof_of_possession(proof: &Proof, client_secret: &str) -> bool {
     info!("Verifying proof of possession");
-
-    match verify_jwt(&proof.jwt) {
+    match verify_jwt_with_key(&proof.jwt, client_secret) {
         Ok(claims) => {
             debug!("Proof JWT successfully verified: {:?}", claims);
             if let Some(nonce) = claims.get("nonce") {
@@ -117,19 +116,16 @@ fn generate_jwt(claims: &Value) -> String {
     encode(
         &Header::new(Algorithm::HS256),
         claims,
-        &EncodingKey::from_secret(config::JWT_SECRET.as_ref()),
+        &EncodingKey::from_secret(config::CREDENTIAL_SECRET.as_ref()),
     )
     .expect("Failed to encode JWT")
 }
 
-fn verify_jwt(token: &str) -> Result<Value, jsonwebtoken::errors::Error> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = false;
-    let token_data = decode::<Value>(
-        token,
-        &DecodingKey::from_secret(config::JWT_SECRET.as_ref()),
-        &validation,
-    )?;
+// JWT検証用
+fn verify_jwt_with_key(token: &str, client_secret: &str) -> Result<Value, jsonwebtoken::errors::Error> {
+    let decoding_key = DecodingKey::from_secret(client_secret.as_ref());
+    let validation = Validation::new(Algorithm::HS256);
+    let token_data = decode::<Value>(token, &decoding_key, &validation)?;
     Ok(token_data.claims)
 }
 
@@ -216,7 +212,7 @@ pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCred
         .map(|(k, v)| (k.as_str(), v.clone()))
         .collect();
 
-    let (sd_jwt, disclosures, sd_hashes) = generate_sd_jwt(&claims, &selective_claims)?;
+    let (_sd_jwt, disclosures, sd_hashes) = generate_sd_jwt(&claims, &selective_claims)?;
     claims["_sd"] = serde_json::Value::Array(sd_hashes);
 
     // vctをcredentialSubjectに追加
@@ -232,7 +228,7 @@ pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCred
         ..Default::default()
     };
 
-    let sd_jwt = encode(&header, &claims, &EncodingKey::from_secret(config::JWT_SECRET.as_ref()))
+    let sd_jwt = encode(&header, &claims, &EncodingKey::from_secret(config::CREDENTIAL_SECRET.as_ref()))
         .map_err(|e| e.to_string())?;
 
     // SD-JWT-VCの検証
@@ -296,7 +292,7 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
     }
     let jwt = parts[0..3].join(".");
     let disclosures = &parts[3..];
-    let mut claims = verify_jwt(&jwt).map_err(|e| e.to_string())?;
+    let mut claims = verify_jwt_with_key(&jwt, config::CREDENTIAL_SECRET).map_err(|e| e.to_string())?;
     for disclosure in disclosures {
         let decoded = general_purpose::URL_SAFE_NO_PAD
             .decode(disclosure)
@@ -345,7 +341,7 @@ pub fn generate_access_token(client_id: &str, scope: Option<&str>) -> Result<Tok
     let access_token = encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(config::JWT_SECRET.as_ref())
+        &EncodingKey::from_secret(config::ACCESS_TOKEN_SECRET.as_ref())
     ).map_err(|e| e.to_string())?;
 
     debug!("Access Token: {}", access_token);

@@ -2,8 +2,14 @@
 
 pub const SERVER_ADDRESS: &str = "127.0.0.1:8080";
 
-// JWT検証用の秘密鍵（実際の環境では安全に管理された鍵を使用すること）
-pub const JWT_SECRET: &str = "your_secret_key_for_jwt_validation_and_signing";
+// アクセストークンの秘密鍵（実際の環境では安全に管理された鍵を使用すること）
+pub const ACCESS_TOKEN_SECRET: &str = "ACCESS_TOKEN_SECRET_KEY";
+
+// クレデンシャル発行用の秘密鍵（実際の環境では安全に管理された鍵を使用すること）
+pub const CREDENTIAL_SECRET: &str = "ISSUER_SECRET_KEY";
+
+// クライアントの秘密鍵（実際の環境では安全に管理された鍵を使用すること）
+pub const CLIENT_SECRET: &str = "CLIENT_SECRET_KEY";
 
 // クレデンシャル発行者の情報
 pub const CREDENTIAL_ISSUER: &str = "https://example.com";

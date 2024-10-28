@@ -6,6 +6,7 @@ use crate::services::{
     generate_credential, generate_nonce, generate_sd_jwt_vc, validate_access_token,
     validate_request, verify_proof_of_possession, authenticate_client, validate_grant_type, generate_access_token
 };
+use crate::config;
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use log::{debug, info, error};
 
@@ -38,7 +39,7 @@ pub async fn credential_endpoint(
         ));
     }
 
-    if !verify_proof_of_possession(&body.proof) {
+    if !verify_proof_of_possession(&body.proof, config::CLIENT_SECRET) {
         return HttpResponse::BadRequest().json(ErrorResponse::new(
             "invalid_proof",
             "The proof of possession is invalid",
