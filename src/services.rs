@@ -292,7 +292,7 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
     }
     let jwt = parts[0..3].join(".");
     let disclosures = &parts[3..];
-    let mut claims = verify_jwt_with_key(&jwt, config::CREDENTIAL_SECRET).map_err(|e| e.to_string())?;
+    let mut claims = verify_jwt_with_key(&jwt, &config::CREDENTIAL_SECRET).map_err(|e| e.to_string())?;
     for disclosure in disclosures {
         let decoded = general_purpose::URL_SAFE_NO_PAD
             .decode(disclosure)

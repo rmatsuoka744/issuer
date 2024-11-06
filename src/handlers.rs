@@ -39,7 +39,7 @@ pub async fn credential_endpoint(
         ));
     }
 
-    if !verify_proof_of_possession(&body.proof, config::CLIENT_SECRET) {
+    if !verify_proof_of_possession(&body.proof, &config::CLIENT_SECRET) {
         return HttpResponse::BadRequest().json(ErrorResponse::new(
             "invalid_proof",
             "The proof of possession is invalid",
