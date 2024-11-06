@@ -1,3 +1,4 @@
+use crate::db::{get_secret_key_as_str, get_client_secret_by_id};
 use crate::config;
 use crate::models::{CredentialRequest, Proof, SDJWTVerifiableCredential, TokenResponse};
 use crate::user_data::USER_DATA;
@@ -18,10 +19,12 @@ pub fn generate_test_access_token() -> String {
         "scope": "credential_issue",
         "exp": expiration.timestamp()
     });
+    let access_token_secret = get_secret_key_as_str("ACCESS_TOKEN_SECRET")
+        .expect("Failed to load ACCESS_TOKEN_SECRET");
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(config::ACCESS_TOKEN_SECRET.as_ref()),
+        &EncodingKey::from_secret(access_token_secret.as_ref()),
     )
     .expect("Failed to generate test access token")
 }
@@ -34,10 +37,12 @@ pub fn generate_test_proof_jwt() -> String {
         "iat": Utc::now().timestamp(),
         "exp": expiration.timestamp()
     });
+    let client_secret = get_secret_key_as_str("CLIENT_SECRET")
+        .expect("Failed to load CLIENT_SECRET");
     encode(
         &Header::new(Algorithm::HS256),
         &claims,
-        &EncodingKey::from_secret(config::CLIENT_SECRET.as_ref()),
+        &EncodingKey::from_secret(client_secret.as_ref()),
     )
     .expect("Failed to generate test proof JWT")
 }
@@ -45,7 +50,9 @@ pub fn generate_test_proof_jwt() -> String {
 // 検証関数
 pub fn validate_access_token(token: &str) -> bool {
     info!("Validating access token");
-    let decoding_key = DecodingKey::from_secret(config::ACCESS_TOKEN_SECRET.as_ref());
+    let access_token_secret = get_secret_key_as_str("ACCESS_TOKEN_SECRET")
+        .expect("Failed to load ACCESS_TOKEN_SECRET");
+    let decoding_key = DecodingKey::from_secret(access_token_secret.as_ref());
     let validation = Validation::new(Algorithm::HS256);
     match decode::<Value>(token, &decoding_key, &validation) {
         Ok(token_data) => {
@@ -113,10 +120,12 @@ pub fn verify_proof_of_possession(proof: &Proof, client_secret: &str) -> bool {
 
 // JWT関連の関数
 fn generate_jwt(claims: &Value) -> String {
+    let credential_secret = get_secret_key_as_str("CREDENTIAL_SECRET")
+        .expect("Failed to load CREDENTIAL_SECRET");
     encode(
         &Header::new(Algorithm::HS256),
         claims,
-        &EncodingKey::from_secret(config::CREDENTIAL_SECRET.as_ref()),
+        &EncodingKey::from_secret(credential_secret.as_ref()),
     )
     .expect("Failed to encode JWT")
 }
@@ -228,7 +237,10 @@ pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCred
         ..Default::default()
     };
 
-    let sd_jwt = encode(&header, &claims, &EncodingKey::from_secret(config::CREDENTIAL_SECRET.as_ref()))
+    let credential_secret = get_secret_key_as_str("CREDENTIAL_SECRET")
+    .expect("Failed to load CREDENTIAL_SECRET");
+
+    let sd_jwt = encode(&header, &claims, &EncodingKey::from_secret(credential_secret.as_ref()))
         .map_err(|e| e.to_string())?;
 
     // SD-JWT-VCの検証
@@ -292,7 +304,9 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
     }
     let jwt = parts[0..3].join(".");
     let disclosures = &parts[3..];
-    let mut claims = verify_jwt_with_key(&jwt, &config::CREDENTIAL_SECRET).map_err(|e| e.to_string())?;
+    let credential_secret = get_secret_key_as_str("CREDENTIAL_SECRET")
+    .expect("Failed to load CREDENTIAL_SECRET");
+    let mut claims = verify_jwt_with_key(&jwt, &credential_secret).map_err(|e| e.to_string())?;
     for disclosure in disclosures {
         let decoded = general_purpose::URL_SAFE_NO_PAD
             .decode(disclosure)
@@ -316,7 +330,7 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
 
 // TokenEndpoint
 pub fn authenticate_client(client_id: &str, client_secret: &str) -> bool {
-    if let Some(expected_secret) = config::get_client_secret(client_id) {
+    if let Some(expected_secret) = get_client_secret_by_id(client_id) {
         client_secret == expected_secret
     } else {
         false
@@ -341,10 +355,13 @@ pub fn generate_access_token(client_id: &str, scope: Option<&str>) -> Result<Tok
         "scope": scope,
     });
 
+    let access_token_secret = get_secret_key_as_str("ACCESS_TOKEN_SECRET")
+    .expect("Failed to load ACCESS_TOKEN_SECRET");
+
     let access_token = encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(config::ACCESS_TOKEN_SECRET.as_ref())
+        &EncodingKey::from_secret(access_token_secret.as_ref())
     ).map_err(|e| e.to_string())?;
 
     debug!("Access Token: {}", access_token);

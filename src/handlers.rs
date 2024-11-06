@@ -6,7 +6,7 @@ use crate::services::{
     generate_credential, generate_nonce, generate_sd_jwt_vc, validate_access_token,
     validate_request, verify_proof_of_possession, authenticate_client, validate_grant_type, generate_access_token
 };
-use crate::config;
+use crate::db::get_secret_key_as_str;
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use log::{debug, info, error};
 
@@ -39,12 +39,24 @@ pub async fn credential_endpoint(
         ));
     }
 
-    if !verify_proof_of_possession(&body.proof, &config::CLIENT_SECRET) {
+    // `config::CLIENT_SECRET` をデータベースから取得
+    let client_secret = match get_secret_key_as_str("CLIENT_SECRET") {
+        Ok(secret) => secret,
+        Err(_) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse::new(
+                "server_error",
+                "Failed to retrieve client secret",
+            ))
+        }
+    };
+
+    if !verify_proof_of_possession(&body.proof, &client_secret) {
         return HttpResponse::BadRequest().json(ErrorResponse::new(
             "invalid_proof",
             "The proof of possession is invalid",
         ));
     }
+
 
     let mut response = CombinedCredentialResponse {
         w3c_vc: None,
