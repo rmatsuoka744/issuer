@@ -1,5 +1,5 @@
-use crate::db::{get_secret_key_as_str, get_client_secret_by_id};
 use crate::config;
+use crate::db::{get_client_secret_by_id, get_private_key_as_str, get_public_key_as_str};
 use crate::models::{CredentialRequest, Proof, SDJWTVerifiableCredential, TokenResponse};
 use crate::user_data::USER_DATA;
 use base64::{engine::general_purpose, Engine as _};
@@ -19,12 +19,15 @@ pub fn generate_test_access_token() -> String {
         "scope": "credential_issue",
         "exp": expiration.timestamp()
     });
-    let access_token_secret = get_secret_key_as_str("ACCESS_TOKEN_SECRET")
-        .expect("Failed to load ACCESS_TOKEN_SECRET");
+    let access_token_private_key =
+        get_private_key_as_str("ACCESS_TOKEN").expect("Failed to load ACCESS_TOKEN private key");
+    println!("{:?}", access_token_private_key);
+    let encoding_key = EncodingKey::from_ed_pem(access_token_private_key.as_ref())
+        .expect("Invalid EdDSA private key format");
     encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(access_token_secret.as_ref()),
+        &Header::new(Algorithm::EdDSA), 
+        &claims, 
+        &encoding_key
     )
     .expect("Failed to generate test access token")
 }
@@ -37,12 +40,14 @@ pub fn generate_test_proof_jwt() -> String {
         "iat": Utc::now().timestamp(),
         "exp": expiration.timestamp()
     });
-    let client_secret = get_secret_key_as_str("CLIENT_SECRET")
-        .expect("Failed to load CLIENT_SECRET");
+    let client_auth_private_key = get_private_key_as_str("CLIENT_AUTH")
+        .expect("Failed to load CLIENT_AUTH private key");
+    let encoding_key = EncodingKey::from_ed_pem(client_auth_private_key.as_ref())
+        .expect("Invalid EdDSA private key format");
     encode(
-        &Header::new(Algorithm::HS256),
+        &Header::new(Algorithm::EdDSA),
         &claims,
-        &EncodingKey::from_secret(client_secret.as_ref()),
+        &encoding_key,
     )
     .expect("Failed to generate test proof JWT")
 }
@@ -50,10 +55,12 @@ pub fn generate_test_proof_jwt() -> String {
 // 検証関数
 pub fn validate_access_token(token: &str) -> bool {
     info!("Validating access token");
-    let access_token_secret = get_secret_key_as_str("ACCESS_TOKEN_SECRET")
-        .expect("Failed to load ACCESS_TOKEN_SECRET");
-    let decoding_key = DecodingKey::from_secret(access_token_secret.as_ref());
-    let validation = Validation::new(Algorithm::HS256);
+    let access_token_public_key = get_public_key_as_str("ACCESS_TOKEN")
+        .expect("Failed to load ACCESS_TOKEN public key");
+    let decoding_key = DecodingKey::from_ed_pem(access_token_public_key.as_ref())
+        .expect("Invalid EdDSA public key format");
+    let validation = Validation::new(Algorithm::EdDSA);
+
     match decode::<Value>(token, &decoding_key, &validation) {
         Ok(token_data) => {
             debug!("Token successfully decoded: {:?}", token_data.claims);
@@ -72,6 +79,7 @@ pub fn validate_access_token(token: &str) -> bool {
         }
     }
 }
+
 
 pub fn validate_request(req: &CredentialRequest) -> bool {
     info!("Validating request");
@@ -97,9 +105,12 @@ pub fn validate_request(req: &CredentialRequest) -> bool {
     true
 }
 
-pub fn verify_proof_of_possession(proof: &Proof, client_secret: &str) -> bool {
+pub fn verify_proof_of_possession(proof: &Proof, client_public_key: &str) -> bool {
     info!("Verifying proof of possession");
-    match verify_jwt_with_key(&proof.jwt, client_secret) {
+    let decoding_key = DecodingKey::from_ed_pem(client_public_key.as_ref())
+        .expect("Invalid EdDSA public key format");
+
+    match verify_jwt_with_key(&proof.jwt, &decoding_key) {
         Ok(claims) => {
             debug!("Proof JWT successfully verified: {:?}", claims);
             if let Some(nonce) = claims.get("nonce") {
@@ -118,25 +129,32 @@ pub fn verify_proof_of_possession(proof: &Proof, client_secret: &str) -> bool {
     }
 }
 
+
 // JWT関連の関数
 fn generate_jwt(claims: &Value) -> String {
-    let credential_secret = get_secret_key_as_str("CREDENTIAL_SECRET")
-        .expect("Failed to load CREDENTIAL_SECRET");
+    let credential_private_key = get_private_key_as_str("CREDENTIAL_ISSUE")
+        .expect("Failed to load CREDENTIAL_ISSUE private key");
+    let encoding_key = EncodingKey::from_ed_pem(credential_private_key.as_ref())
+        .expect("Invalid EdDSA private key format");
     encode(
-        &Header::new(Algorithm::HS256),
+        &Header::new(Algorithm::EdDSA),
         claims,
-        &EncodingKey::from_secret(credential_secret.as_ref()),
+        &encoding_key,
     )
     .expect("Failed to encode JWT")
 }
 
+
 // JWT検証用
-fn verify_jwt_with_key(token: &str, client_secret: &str) -> Result<Value, jsonwebtoken::errors::Error> {
-    let decoding_key = DecodingKey::from_secret(client_secret.as_ref());
-    let validation = Validation::new(Algorithm::HS256);
-    let token_data = decode::<Value>(token, &decoding_key, &validation)?;
+fn verify_jwt_with_key(
+    token: &str,
+    decoding_key: &DecodingKey,
+) -> Result<Value, jsonwebtoken::errors::Error> {
+    let validation = Validation::new(Algorithm::EdDSA);
+    let token_data = decode::<Value>(token, decoding_key, &validation)?;
     Ok(token_data.claims)
 }
+
 
 // クレデンシャル生成関数
 pub fn generate_credential(req: &CredentialRequest) -> String {
@@ -233,25 +251,29 @@ pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCred
 
     let header = Header {
         typ: Some("vc+sd-jwt".to_string()),
-        alg: Algorithm::HS256,
+        alg: Algorithm::EdDSA,
         ..Default::default()
     };
 
-    let credential_secret = get_secret_key_as_str("CREDENTIAL_SECRET")
-    .expect("Failed to load CREDENTIAL_SECRET");
+    let credential_private_key = get_private_key_as_str("CREDENTIAL_ISSUE")
+        .expect("Failed to load CREDENTIAL_ISSUE private key");
+    let encoding_key = EncodingKey::from_ed_pem(credential_private_key.as_ref())
+        .expect("Invalid EdDSA private key format");
 
-    let sd_jwt = encode(&header, &claims, &EncodingKey::from_secret(credential_secret.as_ref()))
-        .map_err(|e| e.to_string())?;
+    let sd_jwt = encode(
+        &header,
+        &claims,
+        &encoding_key,
+    )
+    .map_err(|e| e.to_string())?;
 
     // SD-JWT-VCの検証
     match verify_sd_jwt(&sd_jwt) {
-        Ok(_) => {
-            Ok(SDJWTVerifiableCredential {
-                sd_jwt,
-                disclosures,
-                key_binding_jwt: Some(key_binding_jwt),
-            })
-        },
+        Ok(_) => Ok(SDJWTVerifiableCredential {
+            sd_jwt,
+            disclosures,
+            key_binding_jwt: Some(key_binding_jwt),
+        }),
         Err(err) => {
             error!("SD-JWT-VC verification failed: {}", err);
             Err(err)
@@ -259,7 +281,10 @@ pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCred
     }
 }
 
-fn generate_sd_jwt(claims: &Value, selective_claims: &[(&str, serde_json::Value)]) -> Result<(String, Vec<String>, Vec<Value>), String> {
+fn generate_sd_jwt(
+    claims: &Value,
+    selective_claims: &[(&str, serde_json::Value)],
+) -> Result<(String, Vec<String>, Vec<Value>), String> {
     let mut jwt_claims = claims.clone();
     let mut disclosures = Vec::new();
     let mut sd_hashes = Vec::new();
@@ -302,17 +327,24 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
     if parts.len() < 2 {
         return Err("Invalid SD-JWT format".to_string());
     }
+
     let jwt = parts[0..3].join(".");
     let disclosures = &parts[3..];
-    let credential_secret = get_secret_key_as_str("CREDENTIAL_SECRET")
-    .expect("Failed to load CREDENTIAL_SECRET");
-    let mut claims = verify_jwt_with_key(&jwt, &credential_secret).map_err(|e| e.to_string())?;
+
+    let credential_public_key = get_public_key_as_str("CREDENTIAL_ISSUE")
+        .expect("Failed to load CREDENTIAL_ISSUE public key");
+    let decoding_key = DecodingKey::from_ed_pem(credential_public_key.as_ref())
+        .expect("Invalid EdDSA public key format");
+    let mut claims = verify_jwt_with_key(&jwt, &decoding_key).map_err(|e| e.to_string())?;
+
     for disclosure in disclosures {
         let decoded = general_purpose::URL_SAFE_NO_PAD
             .decode(disclosure)
             .map_err(|_| "Invalid disclosure encoding".to_string())?;
+        
         let disclosure_json: Value = serde_json::from_slice(&decoded)
             .map_err(|_| "Invalid disclosure format".to_string())?;
+
         if let (Some(_salt), Some(key), Some(value)) = (
             disclosure_json.get(0),
             disclosure_json.get(1),
@@ -341,7 +373,10 @@ pub fn validate_grant_type(grant_type: &str) -> bool {
     grant_type == "client_credentials"
 }
 
-pub fn generate_access_token(client_id: &str, scope: Option<&str>) -> Result<TokenResponse, String> {
+pub fn generate_access_token(
+    client_id: &str,
+    scope: Option<&str>,
+) -> Result<TokenResponse, String> {
     let now = Utc::now();
     let expires_in = Duration::hours(1);
     let scope = scope.unwrap_or("credential_issue").to_string();
@@ -355,14 +390,17 @@ pub fn generate_access_token(client_id: &str, scope: Option<&str>) -> Result<Tok
         "scope": scope,
     });
 
-    let access_token_secret = get_secret_key_as_str("ACCESS_TOKEN_SECRET")
-    .expect("Failed to load ACCESS_TOKEN_SECRET");
+    let access_token_private_key = get_private_key_as_str("ACCESS_TOKEN")
+        .expect("Failed to load ACCESS_TOKEN private key");
+    let encoding_key = EncodingKey::from_ed_pem(access_token_private_key.as_ref())
+        .expect("Invalid EdDSA private key format");
 
     let access_token = encode(
-        &Header::default(),
+        &Header::new(Algorithm::EdDSA),
         &claims,
-        &EncodingKey::from_secret(access_token_secret.as_ref())
-    ).map_err(|e| e.to_string())?;
+        &encoding_key,
+    )
+    .map_err(|e| e.to_string())?;
 
     debug!("Access Token: {}", access_token);
 

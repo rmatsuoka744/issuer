@@ -1,14 +1,15 @@
+use crate::db::get_public_key_as_str;
 use crate::models::{
     CombinedCredentialResponse, CredentialRequest, CredentialResponse, ErrorResponse,
     IssuerMetadata, TokenRequest,
 };
 use crate::services::{
-    generate_credential, generate_nonce, generate_sd_jwt_vc, validate_access_token,
-    validate_request, verify_proof_of_possession, authenticate_client, validate_grant_type, generate_access_token
+    authenticate_client, generate_access_token, generate_credential, generate_nonce,
+    generate_sd_jwt_vc, validate_access_token, validate_grant_type, validate_request,
+    verify_proof_of_possession,
 };
-use crate::db::get_secret_key_as_str;
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
-use log::{debug, info, error};
+use log::{debug, error, info};
 
 // handlers.rs
 
@@ -39,8 +40,7 @@ pub async fn credential_endpoint(
         ));
     }
 
-    // `config::CLIENT_SECRET` をデータベースから取得
-    let client_secret = match get_secret_key_as_str("CLIENT_SECRET") {
+    let client_public_key = match get_public_key_as_str("CLIENT_AUTH") {
         Ok(secret) => secret,
         Err(_) => {
             return HttpResponse::InternalServerError().json(ErrorResponse::new(
@@ -50,13 +50,12 @@ pub async fn credential_endpoint(
         }
     };
 
-    if !verify_proof_of_possession(&body.proof, &client_secret) {
+    if !verify_proof_of_possession(&body.proof, &client_public_key) {
         return HttpResponse::BadRequest().json(ErrorResponse::new(
             "invalid_proof",
             "The proof of possession is invalid",
         ));
     }
-
 
     let mut response = CombinedCredentialResponse {
         w3c_vc: None,
@@ -75,20 +74,18 @@ pub async fn credential_endpoint(
                     c_nonce_expires_in,
                 });
             }
-            "sd_jwt_vc" => {
-                match generate_sd_jwt_vc(&body) {
-                    Ok(sd_jwt_vc) => {
-                        response.sd_jwt_vc = Some(sd_jwt_vc);
-                    },
-                    Err(err) => {
-                        error!("Failed to generate SD-JWT-VC: {}", err);
-                        return HttpResponse::InternalServerError().json(ErrorResponse::new(
-                            "server_error",
-                            "Failed to generate SD-JWT-VC",
-                        ));
-                    }
+            "sd_jwt_vc" => match generate_sd_jwt_vc(&body) {
+                Ok(sd_jwt_vc) => {
+                    response.sd_jwt_vc = Some(sd_jwt_vc);
                 }
-            }
+                Err(err) => {
+                    error!("Failed to generate SD-JWT-VC: {}", err);
+                    return HttpResponse::InternalServerError().json(ErrorResponse::new(
+                        "server_error",
+                        "Failed to generate SD-JWT-VC",
+                    ));
+                }
+            },
             _ => {
                 return HttpResponse::BadRequest().json(ErrorResponse::new(
                     "unsupported_format",
@@ -130,8 +127,6 @@ fn extract_token(req: &HttpRequest) -> Result<String, HttpResponse> {
     }
 }
 
-
-
 #[post("/token")]
 async fn token_endpoint(_req: HttpRequest, body: web::Json<TokenRequest>) -> impl Responder {
     info!("Token endpoint called");
@@ -153,9 +148,7 @@ async fn token_endpoint(_req: HttpRequest, body: web::Json<TokenRequest>) -> imp
 
     match generate_access_token(&body.client_id, body.scope.as_deref()) {
         Ok(token_response) => HttpResponse::Ok().json(token_response),
-        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse::new(
-            "server_error",
-            &e.to_string(),
-        )),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ErrorResponse::new("server_error", &e.to_string())),
     }
 }

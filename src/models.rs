@@ -82,8 +82,6 @@ impl Default for IssuerMetadata {
     }
 }
 
-
-
 #[derive(Deserialize, Debug)]
 pub struct TokenRequest {
     pub grant_type: String,
