@@ -4,6 +4,7 @@ mod handlers;
 mod models;
 mod services;
 mod user_data;
+mod utils;
 
 use actix_web::{App, HttpServer};
 use log::info;

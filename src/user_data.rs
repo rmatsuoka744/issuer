@@ -20,3 +20,10 @@ lazy_static! {
       "is_over_65": true
     });
 }
+
+lazy_static! {
+    pub static ref PATIENT_DATA: serde_json::Value = json!({
+      "vct": "https://credentials.example.com/identity_credential",
+      "patient_id": "test_id"
+    });
+}

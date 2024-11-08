@@ -13,7 +13,8 @@ lazy_static! {
 /// データベースから指定された鍵名に基づいて秘密鍵を取得し、文字列として返す
 pub fn get_private_key_as_str(key_name: &str) -> Result<String> {
     let conn = DB_CONNECTION.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT key_value FROM keys WHERE key_name = ?1 AND key_type = 'private'")?;
+    let mut stmt =
+        conn.prepare("SELECT key_value FROM keys WHERE key_name = ?1 AND key_type = 'private'")?;
     let mut rows = stmt.query(params![key_name])?;
 
     if let Some(row) = rows.next()? {
@@ -28,7 +29,8 @@ pub fn get_private_key_as_str(key_name: &str) -> Result<String> {
 /// データベースから指定された鍵名に基づいて公開鍵を取得し、文字列として返す
 pub fn get_public_key_as_str(key_name: &str) -> Result<String> {
     let conn = DB_CONNECTION.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT key_value FROM keys WHERE key_name = ?1 AND key_type = 'public'")?;
+    let mut stmt =
+        conn.prepare("SELECT key_value FROM keys WHERE key_name = ?1 AND key_type = 'public'")?;
     let mut rows = stmt.query(params![key_name])?;
 
     if let Some(row) = rows.next()? {
