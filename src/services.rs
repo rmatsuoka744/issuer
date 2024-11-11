@@ -185,33 +185,26 @@ fn store_nonce(nonce: &str, _expires_in: u64) {
 }
 
 // SD-JWT関連の関数
-pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCredential, String> {
+pub fn generate_sd_jwt_vc(_req: &CredentialRequest) -> Result<SDJWTVerifiableCredential, String> {
     info!("Generating SD-JWT VC");
     let now = Utc::now();
     let jwk = Jwk::new();
+
+    // クレームを作成
     let mut claims = serde_json::json!({
         "iss": config::CREDENTIAL_ISSUER,
         "sub": Uuid::new_v4().to_string(),
         "iat": now.timestamp(),
         "exp": (now + Duration::hours(24)).timestamp(),
-        "vc": {
-            "@context": [
-                "https://www.w3.org/2018/credentials/v1",
-                "https://www.w3.org/2018/credentials/examples/v1"
-            ],
-            "type": req.types.clone(),
-            "credentialSubject": {
-                "id": "did:example:ebfeb1f712ebc6f1c276e12ec21"
-            }
-        },
         "_sd_alg": "sha-256",
         "cnf": {
             "jwk": jwk
         }
     });
+
     println!("{:?}", claims);
 
-    // USER_DATAからクレームを追加
+    // USER_DATAから選択的開示のクレームを取得してハッシュ化
     let selective_claims: Vec<(&str, serde_json::Value)> = USER_DATA
         .as_object()
         .unwrap()
@@ -223,19 +216,22 @@ pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCred
     let (_sd_jwt, disclosures, sd_hashes) = generate_sd_jwt(&claims, &selective_claims)?;
     claims["_sd"] = serde_json::Value::Array(sd_hashes);
 
-    // vctをcredentialSubjectに追加
+    // vct（クレデンシャルタイプ）を一般的なクレームとして追加
     if let Some(vct) = USER_DATA.get("vct") {
-        claims["vc"]["credentialSubject"]["vct"] = vct.clone();
+        claims["vct"] = vct.clone();
     }
 
+    // キーバインディングJWTを生成
     let key_binding_jwt = generate_key_binding_jwt();
 
+    // ヘッダー作成
     let header = Header {
         typ: Some("vc+sd-jwt".to_string()),
         alg: Algorithm::EdDSA,
         ..Default::default()
     };
 
+    // プライベートキーで署名してSD-JWTをエンコード
     let credential_private_key = get_private_key_as_str("CREDENTIAL_ISSUE")
         .expect("Failed to load CREDENTIAL_ISSUE private key");
     let encoding_key = EncodingKey::from_ed_pem(credential_private_key.as_ref())
