@@ -332,20 +332,37 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, String> {
             }
         }
     }
+    info!("Verified SD-JWT-VC!");
     Ok(claims)
 }
 
 // TokenEndpoint
 pub fn authenticate_client(client_id: &str, client_secret: &str) -> bool {
     if let Some(expected_secret) = get_client_secret_by_id(client_id) {
-        client_secret == expected_secret
+        let authenticated = client_secret == expected_secret;
+        if !authenticated {
+            error!(
+                "Client authentication failed: invalid client_secret for client_id {}",
+                client_id
+            );
+        }
+        authenticated
     } else {
+        error!(
+            "Client authentication failed: client_id {} not found",
+            client_id
+        );
         false
     }
 }
 
 pub fn validate_grant_type(grant_type: &str) -> bool {
-    grant_type == "client_credentials"
+    if grant_type != "client_credentials" {
+        error!("Unsupported grant type: {}", grant_type);
+        false
+    } else {
+        true
+    }
 }
 
 pub fn generate_access_token(
@@ -356,6 +373,10 @@ pub fn generate_access_token(
     let expires_in = Duration::hours(1);
     let scope = scope.unwrap_or("credential_issue").to_string();
 
+    if scope != "credential_issue" {
+        return Err("Invalid scope".to_string());
+    }
+
     let claims = serde_json::json!({
         "iss": "https://example.com",
         "sub": client_id,
@@ -365,15 +386,13 @@ pub fn generate_access_token(
         "scope": scope,
     });
 
-    let access_token_private_key =
-        get_private_key_as_str("ACCESS_TOKEN").expect("Failed to load ACCESS_TOKEN private key");
+    let access_token_private_key = get_private_key_as_str("ACCESS_TOKEN")
+        .map_err(|_| "Failed to load ACCESS_TOKEN private key".to_string())?;
     let encoding_key = EncodingKey::from_ed_pem(access_token_private_key.as_ref())
-        .expect("Invalid EdDSA private key format");
-
+        .map_err(|_| "Invalid EdDSA private key format".to_string())?;
     let access_token = encode(&Header::new(Algorithm::EdDSA), &claims, &encoding_key)
         .map_err(|e| e.to_string())?;
-
-    debug!("Access Token: {}", access_token);
+    debug!("Generated Access Token: {}", access_token);
 
     Ok(TokenResponse {
         access_token,
@@ -381,6 +400,6 @@ pub fn generate_access_token(
         expires_in: expires_in.num_seconds() as u64,
         scope,
         c_nonce: Uuid::new_v4().to_string(),
-        c_nonce_expires_in: 300, // 5分
+        c_nonce_expires_in: 300,
     })
 }

@@ -19,6 +19,9 @@ async fn main() -> std::io::Result<()> {
     info!("Test Access Token: {}", test_token);
     info!("Test Proof JWT: {}", test_proof_jwt);
     info!(
+        "Metadata Endpoint: curl -X GET http://localhost:8080/.well-known/openid-credential-issuer"
+    );
+    info!(
         r#"Test curl command:
 curl -X POST http://localhost:8080/token \
   -H "Content-Type: application/json" \

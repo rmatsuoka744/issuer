@@ -130,9 +130,9 @@ fn extract_token(req: &HttpRequest) -> Result<String, HttpResponse> {
 #[post("/token")]
 async fn token_endpoint(_req: HttpRequest, body: web::Json<TokenRequest>) -> impl Responder {
     info!("Token endpoint called");
-    debug!("Received token request: {:?}", body);
 
     if !authenticate_client(&body.client_id, &body.client_secret) {
+        error!("Authentication failed for client_id: {}", body.client_id);
         return HttpResponse::Unauthorized().json(ErrorResponse::new(
             "invalid_client",
             "Client authentication failed",
@@ -140,6 +140,7 @@ async fn token_endpoint(_req: HttpRequest, body: web::Json<TokenRequest>) -> imp
     }
 
     if !validate_grant_type(&body.grant_type) {
+        error!("Invalid grant type: {}", body.grant_type);
         return HttpResponse::BadRequest().json(ErrorResponse::new(
             "unsupported_grant_type",
             "Unsupported grant type",
@@ -148,7 +149,10 @@ async fn token_endpoint(_req: HttpRequest, body: web::Json<TokenRequest>) -> imp
 
     match generate_access_token(&body.client_id, body.scope.as_deref()) {
         Ok(token_response) => HttpResponse::Ok().json(token_response),
-        Err(e) => HttpResponse::InternalServerError()
-            .json(ErrorResponse::new("server_error", &e.to_string())),
+        Err(e) => {
+            error!("Failed to generate access token: {}", e);
+            HttpResponse::InternalServerError()
+                .json(ErrorResponse::new("server_error", &e.to_string()))
+        }
     }
 }
