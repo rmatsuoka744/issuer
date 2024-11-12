@@ -2,12 +2,11 @@ use crate::config;
 use crate::db::{get_client_secret_by_id, get_private_key_as_str, get_public_key_as_str};
 use crate::models::{CredentialRequest, Proof, SDJWTVerifiableCredential, TokenResponse};
 use crate::user_data::USER_DATA;
-use crate::utils::Jwk;
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use log::{debug, error, info};
-use serde_json::Value;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -185,10 +184,9 @@ fn store_nonce(nonce: &str, _expires_in: u64) {
 }
 
 // SD-JWT関連の関数
-pub fn generate_sd_jwt_vc(_req: &CredentialRequest) -> Result<SDJWTVerifiableCredential, String> {
+pub fn generate_sd_jwt_vc(req: &CredentialRequest) -> Result<SDJWTVerifiableCredential, String> {
     info!("Generating SD-JWT VC");
     let now = Utc::now();
-    let jwk = Jwk::new();
 
     // クレームを作成
     let mut claims = serde_json::json!({
@@ -196,11 +194,16 @@ pub fn generate_sd_jwt_vc(_req: &CredentialRequest) -> Result<SDJWTVerifiableCre
         "sub": Uuid::new_v4().to_string(),
         "iat": now.timestamp(),
         "exp": (now + Duration::hours(24)).timestamp(),
-        "_sd_alg": "sha-256",
-        "cnf": {
-            "jwk": jwk
-        }
+        "_sd_alg": "sha-256"
     });
+
+    // 公開鍵（JWK）情報がある場合のみ`cnf`フィールドに追加
+    let key_binding_jwt = if let Some(jwk) = &req.cnf {
+        claims["cnf"] = json!({ "jwk": jwk }); // `cnf`フィールドに公開鍵を追加
+        Some(generate_key_binding_jwt(jwk.clone())) // Key Binding JWTを生成
+    } else {
+        None
+    };
 
     println!("{:?}", claims);
 
@@ -220,9 +223,6 @@ pub fn generate_sd_jwt_vc(_req: &CredentialRequest) -> Result<SDJWTVerifiableCre
     if let Some(vct) = USER_DATA.get("vct") {
         claims["vct"] = vct.clone();
     }
-
-    // キーバインディングJWTを生成
-    let key_binding_jwt = generate_key_binding_jwt();
 
     // ヘッダー作成
     let header = Header {
@@ -244,7 +244,7 @@ pub fn generate_sd_jwt_vc(_req: &CredentialRequest) -> Result<SDJWTVerifiableCre
         Ok(_) => Ok(SDJWTVerifiableCredential {
             sd_jwt,
             disclosures,
-            key_binding_jwt: Some(key_binding_jwt),
+            key_binding_jwt, // OptionalなのでNoneの場合もOK
         }),
         Err(err) => {
             error!("SD-JWT-VC verification failed: {}", err);
@@ -274,10 +274,11 @@ fn generate_sd_jwt(
     Ok((jwt_claims.to_string(), disclosures, sd_hashes))
 }
 
-fn generate_key_binding_jwt() -> String {
+fn generate_key_binding_jwt(jwk: Value) -> String {
     let claims = serde_json::json!({
         "iat": Utc::now().timestamp(),
         "nonce": generate_salt(),
+        "cnf": jwk
     });
     generate_jwt(&claims)
 }

@@ -6,6 +6,7 @@ pub struct CredentialRequest {
     pub formats: Vec<String>,
     pub types: Vec<String>,
     pub proof: Proof,
+    pub cnf: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug)]

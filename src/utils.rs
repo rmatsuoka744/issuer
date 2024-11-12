@@ -2,7 +2,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct Jwk {
     kty: String,
     crv: String,
@@ -12,12 +12,12 @@ pub struct Jwk {
 }
 
 impl Jwk {
-    pub fn new() -> Self {
+    pub fn test() -> Self {
         Self {
             kty: "EC".to_string(),
             crv: "P-256".to_string(),
-            x: "TCAER19Zvu3OHF4j4W4vfSVoHIP1ILilDls7vCeGemc".to_string(),
-            y: "ZxjiWWbZMQGHVWKVQ4hbSIirsVfuecCE6t4jT9F2HZQ".to_string(),
+            x: "thisistestjwkx".to_string(),
+            y: "thisistestjwky".to_string(),
             alg: "ES256".to_string(),
         }
     }

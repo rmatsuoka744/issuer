@@ -141,3 +141,73 @@
     "sub": "230f9564-1f40-4d8b-b0dc-e75dffa13a82",
     "vct": "https://credentials.example.com/identity_credential"
 }
+// patient data
+{
+    "w3c_vc": {
+        "format": "jwt_vc_json",
+        "credential": "eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.eyJleHAiOjE3MzE0NjY2MjEsImlhdCI6MTczMTM4MDIyMSwiaXNzIjoiaHR0cHM6Ly9leGFtcGxlLmNvbSIsInN1YiI6ImI0YmMyZGFiLWFkNjEtNDY4OC1iZjFhLTgxMDE3NTYxMDE2NyIsInZjIjp7IkBjb250ZXh0IjpbImh0dHBzOi8vd3d3LnczLm9yZy8yMDE4L2NyZWRlbnRpYWxzL3YxIiwiaHR0cHM6Ly93d3cudzMub3JnLzIwMTgvY3JlZGVudGlhbHMvZXhhbXBsZXMvdjEiXSwiY3JlZGVudGlhbFN1YmplY3QiOnsicGF0aWVudF9pZCI6InRlc3RfaWQiLCJ2Y3QiOiJodHRwczovL2NyZWRlbnRpYWxzLmV4YW1wbGUuY29tL2lkZW50aXR5X2NyZWRlbnRpYWwifSwidHlwZSI6WyJWZXJpZmlhYmxlQ3JlZGVudGlhbCIsIlVuaXZlcnNpdHlEZWdyZWVDcmVkZW50aWFsIl19fQ.GKjWbET1zRssUCyhbCFcgLa7K5TFQp1UStECESYJff9p-pQnLsGBVuypvNwm5hfq8CdIEfWkuXNJlWwV73PYDA",
+        "c_nonce": "c5ad0199-0467-46af-994d-b66095412b42",
+        "c_nonce_expires_in": 300
+    },
+    "sd_jwt_vc": {
+        "sd_jwt": "eyJ0eXAiOiJ2YytzZC1qd3QiLCJhbGciOiJFZERTQSJ9.eyJfc2QiOlsiYU4tVmRtU2lBZ1FzU214REFBZkJNZWM1MVB1eFZxUHYzNndDdDc5X3RkSSJdLCJfc2RfYWxnIjoic2hhLTI1NiIsImNuZiI6eyJqd2siOnsiYWxnIjoiRVMyNTYiLCJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRDQUVSMTladnUzT0hGNGo0VzR2ZlNWb0hJUDFJTGlsRGxzN3ZDZUdlbWMiLCJ5IjoiWnhqaVdXYlpNUUdIVldLVlE0aGJTSWlyc1ZmdWVjQ0U2dDRqVDlGMkhaUSJ9fSwiZXhwIjoxNzMxNDY2NjIxLCJpYXQiOjE3MzEzODAyMjEsImlzcyI6Imh0dHBzOi8vZXhhbXBsZS5jb20iLCJzdWIiOiJmM2FjMWI0OC01ODM1LTRlMjgtODU1Ny03M2JiMTQ5MWZiYTUiLCJ2Y3QiOiJodHRwczovL2NyZWRlbnRpYWxzLmV4YW1wbGUuY29tL2lkZW50aXR5X2NyZWRlbnRpYWwifQ.I7tupwd_UnICcw-jy-Fg5cSzFOE1naxG-leA6ohdHjTdDjVOiJtEj3pnxeRN6fdlqDV43oG8yTYu1gJkZLDoBQ",
+        "disclosures": [
+            "W2JhN2ZlMWM5LWM0ZDMtNDE4Mi1hNmZhLWE4MjJhYTg1MmVkOSwgcGF0aWVudF9pZCwgInRlc3RfaWQiXQ"
+        ],
+        "key_binding_jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.eyJjbmYiOnsiYWxnIjoiRVMyNTYiLCJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRDQUVSMTladnUzT0hGNGo0VzR2ZlNWb0hJUDFJTGlsRGxzN3ZDZUdlbWMiLCJ5IjoiWnhqaVdXYlpNUUdIVldLVlE0aGJTSWlyc1ZmdWVjQ0U2dDRqVDlGMkhaUSJ9LCJpYXQiOjE3MzEzODAyMjEsIm5vbmNlIjoiYzNiOTdhY2ItNThkNC00Y2M5LTk3MTMtNWM5OWIwYjlkMjAyIn0.mXzk3Y_e3nVbi1UY6wvvnMnKLoUjR1OKZm625IwPQdegV5kSgyPoZHL_9IyDVj33OYN_xyecNZkblnk3E2MwDw"
+    }
+}
+// decode w3c_vc
+{
+    "exp": 1731466621,
+    "iat": 1731380221,
+    "iss": "https://example.com",
+    "sub": "b4bc2dab-ad61-4688-bf1a-810175610167",
+    "vc": {
+        "@context": [
+            "https://www.w3.org/2018/credentials/v1",
+            "https://www.w3.org/2018/credentials/examples/v1"
+        ],
+        "credentialSubject": {
+            "patient_id": "test_id",
+            "vct": "https://credentials.example.com/identity_credential"
+        },
+        "type": [
+            "VerifiableCredential",
+            "UniversityDegreeCredential"
+        ]
+    }
+}
+// decode sd_jwt
+{
+    "_sd": [
+        "aN-VdmSiAgQsSmxDAAfBMec51PuxVqPv36wCt79_tdI"
+    ],
+    "_sd_alg": "sha-256",
+    "cnf": {
+        "jwk": {
+            "alg": "ES256",
+            "crv": "P-256",
+            "kty": "EC",
+            "x": "TCAER19Zvu3OHF4j4W4vfSVoHIP1ILilDls7vCeGemc",
+            "y": "ZxjiWWbZMQGHVWKVQ4hbSIirsVfuecCE6t4jT9F2HZQ"
+        }
+    },
+    "exp": 1731466621,
+    "iat": 1731380221,
+    "iss": "https://example.com",
+    "sub": "f3ac1b48-5835-4e28-8557-73bb1491fba5",
+    "vct": "https://credentials.example.com/identity_credential"
+}
+// key binding
+{
+    "cnf": {
+        "alg": "ES256",
+        "crv": "P-256",
+        "kty": "EC",
+        "x": "TCAER19Zvu3OHF4j4W4vfSVoHIP1ILilDls7vCeGemc",
+        "y": "ZxjiWWbZMQGHVWKVQ4hbSIirsVfuecCE6t4jT9F2HZQ"
+    },
+    "iat": 1731380221,
+    "nonce": "c3b97acb-58d4-4cc9-9713-5c99b0b9d202"
+}
