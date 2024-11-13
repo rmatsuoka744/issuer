@@ -1,5 +1,6 @@
 mod config;
 mod db;
+mod errors;
 mod handlers;
 mod models;
 mod services;
@@ -15,8 +16,8 @@ async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("debug"));
     info!("Starting server");
 
-    let test_token = services::generate_test_access_token();
-    let test_proof_jwt = services::generate_test_proof_jwt();
+    let test_token = services::generate_test_access_token().unwrap();
+    let test_proof_jwt = services::generate_test_proof_jwt().unwrap();
     let test_jwk = serde_json::to_value(&Jwk::test()).unwrap();
     info!("Test Access Token: {}", test_token);
     info!("Test Proof JWT: {}", test_proof_jwt);
