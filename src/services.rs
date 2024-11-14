@@ -224,6 +224,12 @@ pub fn generate_sd_jwt_vc(
         .map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?;
     claims["_sd"] = serde_json::Value::Array(sd_hashes);
 
+    // Holder公開鍵がリクエストに含まれているかチェック
+    if let Some(jwk) = &req.cnf {
+        claims["cnf"] = jwk.clone();
+        info!("Added cnf field to claims: {:?}", jwk);
+    }    
+
     // SD-JWTの署名とエンコード
     let sd_jwt =
         sign_sd_jwt(&claims).map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?;
