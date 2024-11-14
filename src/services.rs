@@ -209,17 +209,6 @@ pub fn generate_sd_jwt_vc(
     }
     claims["_sd_alg"] = serde_json::json!("sha-256");
 
-    // 公開鍵（JWK）情報がある場合は`cnf`フィールドに追加し、Key Binding JWTを生成
-    let key_binding_jwt = if let Some(jwk) = &req.cnf {
-        claims["cnf"] = jwk.clone(); // `cnf`フィールドに公開鍵を追加
-        Some(
-            generate_key_binding_jwt(jwk.clone())
-                .map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?,
-        )
-    } else {
-        None
-    };
-
     debug!("{:?}", claims);
 
     // USER_DATAから選択的開示のクレームを取得し、ハッシュ化とディスクロージャを生成
@@ -241,6 +230,16 @@ pub fn generate_sd_jwt_vc(
 
     // SD-JWT-VCの検証
     verify_sd_jwt(&sd_jwt)?;
+
+    // 公開鍵（JWK）情報がある場合は`cnf`フィールドに追加し、Key Binding JWTを生成
+    let key_binding_jwt = if let Some(_) = &req.cnf {
+        Some(
+            generate_key_binding_jwt(&sd_jwt)
+                .map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?,
+        )
+    } else {
+        None
+    };
 
     Ok(SDJWTVerifiableCredential {
         sd_jwt,
@@ -282,12 +281,25 @@ fn generate_sd_jwt(
     Ok((jwt_claims.to_string(), disclosures, sd_hashes))
 }
 
-fn generate_key_binding_jwt(jwk: Value) -> Result<String, IssuerError> {
+fn generate_key_binding_jwt(sd_jwt: &str) -> Result<String, IssuerError> {
+    // SD-JWTのBase64URLエンコードされたJWT部分を抽出
+    let parts: Vec<&str> = sd_jwt.split('~').collect();
+    let jwt_part = parts.first().ok_or(IssuerError::InvalidSdJwtFormat)?;
+
+    // SD-JWTのJWT部分をSHA-256でハッシュ化し、Base64URLエンコード
+    let mut hasher = Sha256::new();
+    hasher.update(jwt_part);
+    let sd_hash = general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
+
+    // Key Binding JWTのペイロードを作成
     let claims = serde_json::json!({
-        "iat": Utc::now().timestamp(),
-        "nonce": generate_salt(),
-        "cnf": jwk
+        "nonce": generate_salt(),         // 一意のノンスを生成
+        "aud": "https://example.com/verifier", // Verifierの識別子
+        "iat": Utc::now().timestamp(),    // 発行時刻
+        "sd_hash": sd_hash                // SD-JWTのハッシュ値
     });
+
+    // SD-JWTの発行時に利用したのと同じキーで署名
     let encoding_key = get_encoding_key("CREDENTIAL_ISSUE")?;
     generate_jwt(&claims, &encoding_key, None)
 }
