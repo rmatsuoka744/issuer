@@ -1,8 +1,12 @@
 use crate::config;
 use crate::db::{get_client_secret_by_id, get_private_key_as_str, get_public_key_as_str};
 use crate::errors::IssuerError;
-use crate::models::{CredentialRequest, Proof, SDJWTVerifiableCredential, TokenResponse};
+use crate::models::{
+    CombinedCredentialResponse, CredentialRequest, CredentialResponse, ErrorResponse, Proof,
+    SDJWTVerifiableCredential, TokenRequest, TokenResponse,
+};
 use crate::user_data::USER_DATA;
+use actix_web::{HttpRequest, HttpResponse};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
@@ -112,11 +116,13 @@ pub fn validate_request(req: &CredentialRequest) -> Result<(), IssuerError> {
 }
 
 // 所有証明の検証関数
-pub fn verify_proof_of_possession(
-    proof: &Proof,
-    client_public_key: &str,
-) -> Result<(), IssuerError> {
-    info!("Verifying proof of possession");
+pub fn verify_proof_of_possession(proof: &Proof) -> Result<(), IssuerError> {
+    // クライアントの公開鍵を取得
+    let client_public_key = get_public_key_as_str("CLIENT_AUTH").map_err(|_| {
+        IssuerError::PublicKeyLoadError("Failed to retrieve client public key".into())
+    })?;
+
+    // 所有証明の検証
     let decoding_key = DecodingKey::from_ed_pem(client_public_key.as_ref())
         .map_err(|_| IssuerError::InvalidPublicKeyFormat)?;
 
@@ -402,4 +408,68 @@ pub fn generate_access_token(
         c_nonce: Uuid::new_v4().to_string(),
         c_nonce_expires_in: 300,
     })
+}
+
+pub fn process_credential_request(
+    req: &CredentialRequest,
+) -> Result<CombinedCredentialResponse, IssuerError> {
+    let mut response = CombinedCredentialResponse {
+        w3c_vc: None,
+        sd_jwt_vc: None,
+    };
+
+    for format in &req.formats {
+        match format.as_str() {
+            "jwt_vc_json" => {
+                let credential = generate_credential(req)?;
+                let (c_nonce, c_nonce_expires_in) = generate_nonce();
+                response.w3c_vc = Some(CredentialResponse {
+                    format: "jwt_vc_json".to_string(),
+                    credential,
+                    c_nonce,
+                    c_nonce_expires_in,
+                });
+            }
+            "sd_jwt_vc" => {
+                let sd_jwt_vc = generate_sd_jwt_vc(req)?;
+                response.sd_jwt_vc = Some(sd_jwt_vc);
+            }
+            _ => {
+                return Err(IssuerError::UnsupportedCredentialFormat(format.clone()));
+            }
+        }
+    }
+
+    Ok(response)
+}
+
+pub fn process_token_request(body: &TokenRequest) -> Result<TokenResponse, IssuerError> {
+    // クライアント認証
+    authenticate_client(&body.client_id, &body.client_secret)?;
+
+    // グラントタイプの検証
+    validate_grant_type(&body.grant_type)?;
+
+    // アクセストークンの生成
+    generate_access_token(&body.client_id, body.scope.as_deref())
+}
+
+pub fn extract_token(req: &HttpRequest) -> Result<String, HttpResponse> {
+    match req.headers().get("Authorization") {
+        Some(auth_header) => {
+            let auth_str = auth_header.to_str().unwrap_or("");
+            if auth_str.starts_with("Bearer ") {
+                Ok(auth_str[7..].to_string())
+            } else {
+                Err(HttpResponse::Unauthorized().json(ErrorResponse::new(
+                    "invalid_token",
+                    "Invalid Authorization header format",
+                )))
+            }
+        }
+        None => Err(HttpResponse::Unauthorized().json(ErrorResponse::new(
+            "invalid_token",
+            "Missing Authorization header",
+        ))),
+    }
 }
