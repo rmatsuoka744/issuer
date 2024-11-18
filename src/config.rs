@@ -9,3 +9,9 @@ pub const SUPPORTED_FORMATS: [&str; 2] = ["jwt_vc_json", "sd_jwt_vc"];
 
 // ノンスの有効期限（秒）
 pub const NONCE_EXPIRATION: u64 = 300; // 5分
+
+// access tokenのaudience
+pub const ACCESS_TOKEN_AUD: &str = "https://issuer.example.com";
+
+// key binding jwtのaudience
+pub const KEY_BINDING_AUD: &str = "https://verifier.example.com";

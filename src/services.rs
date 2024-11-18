@@ -2,8 +2,8 @@ use crate::config;
 use crate::db::{get_client_secret_by_id, get_private_key_as_str, get_public_key_as_str};
 use crate::errors::IssuerError;
 use crate::models::{
-    CombinedCredentialResponse, CredentialRequest, CredentialResponse, ErrorResponse, Proof,
-    SDJWTVerifiableCredential, TokenRequest, TokenResponse,
+    CredentialRequest, CredentialResponse, ErrorResponse, Proof, SDJWTVerifiableCredential,
+    TokenRequest, TokenResponse, W3CVerifiableCredential,
 };
 use crate::user_data::USER_DATA;
 use actix_web::{HttpRequest, HttpResponse};
@@ -228,7 +228,7 @@ pub fn generate_sd_jwt_vc(
     if let Some(jwk) = &req.cnf {
         claims["cnf"] = jwk.clone();
         info!("Added cnf field to claims: {:?}", jwk);
-    }    
+    }
 
     // SD-JWTの署名とエンコード
     let sd_jwt =
@@ -300,7 +300,7 @@ fn generate_key_binding_jwt(sd_jwt: &str) -> Result<String, IssuerError> {
     // Key Binding JWTのペイロードを作成
     let claims = serde_json::json!({
         "nonce": generate_salt(),         // 一意のノンスを生成
-        "aud": "https://example.com/verifier", // Verifierの識別子
+        "aud": config::KEY_BINDING_AUD, // Verifierの識別子
         "iat": Utc::now().timestamp(),    // 発行時刻
         "sd_hash": sd_hash                // SD-JWTのハッシュ値
     });
@@ -405,9 +405,9 @@ pub fn generate_access_token(
     }
 
     let claims = serde_json::json!({
-        "iss": "https://example.com",
+        "iss": config::CREDENTIAL_ISSUER,
         "sub": client_id,
-        "aud": "https://api.example.com",
+        "aud": config::ACCESS_TOKEN_AUD,
         "exp": (now + expires_in).timestamp(),
         "iat": now.timestamp(),
         "scope": scope,
@@ -430,8 +430,8 @@ pub fn generate_access_token(
 
 pub fn process_credential_request(
     req: &CredentialRequest,
-) -> Result<CombinedCredentialResponse, IssuerError> {
-    let mut response = CombinedCredentialResponse {
+) -> Result<CredentialResponse, IssuerError> {
+    let mut response = CredentialResponse {
         w3c_vc: None,
         sd_jwt_vc: None,
     };
@@ -441,7 +441,7 @@ pub fn process_credential_request(
             "jwt_vc_json" => {
                 let credential = generate_credential(req)?;
                 let (c_nonce, c_nonce_expires_in) = generate_nonce();
-                response.w3c_vc = Some(CredentialResponse {
+                response.w3c_vc = Some(W3CVerifiableCredential {
                     format: "jwt_vc_json".to_string(),
                     credential,
                     c_nonce,

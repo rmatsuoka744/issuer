@@ -31,7 +31,7 @@ sequenceDiagram
 
 1. [OpenID for Verifiable Credential Issuance (OID4VCI)](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html)
 2. [W3C Verifiable Credentials Data Model](https://www.w3.org/TR/vc-data-model/)
-3. [draft-ietf-oauth-sd-jwt-vc-04](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-sd-jwt-vc-04)
+3. [draft-ietf-oauth-sd-jwt-vc-06](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-sd-jwt-vc-06)
 
 ## 主な機能
 

@@ -16,7 +16,7 @@ pub struct Proof {
 }
 
 #[derive(Serialize)]
-pub struct CredentialResponse {
+pub struct W3CVerifiableCredential {
     pub format: String,
     pub credential: String,
     pub c_nonce: String,
@@ -31,8 +31,8 @@ pub struct SDJWTVerifiableCredential {
 }
 
 #[derive(Serialize)]
-pub struct CombinedCredentialResponse {
-    pub w3c_vc: Option<CredentialResponse>,
+pub struct CredentialResponse {
+    pub w3c_vc: Option<W3CVerifiableCredential>,
     pub sd_jwt_vc: Option<SDJWTVerifiableCredential>,
 }
 

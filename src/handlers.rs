@@ -15,12 +15,13 @@ pub async fn credential_endpoint(
     info!("Credential endpoint called");
     debug!("Received credential request: {:?}", body);
 
-    // アクセストークンの検証と抽出
+    // アクセストークンの抽出
     let token = match extract_token(&req) {
         Ok(t) => t,
         Err(response) => return response,
     };
 
+    // アクセストークンの検証
     if let Err(e) = validate_access_token(&token) {
         error!("Access token validation failed: {}", e);
         return map_issuer_error_to_response(e);
