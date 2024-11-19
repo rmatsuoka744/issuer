@@ -31,11 +31,15 @@ fn get_decoding_key(key_type: &str) -> Result<DecodingKey, IssuerError> {
 // テスト用のJWT生成関数
 pub fn generate_test_access_token() -> Result<String, IssuerError> {
     info!("Generate test access token");
-    let expiration = Utc::now() + Duration::hours(1);
+    let expiration = Utc::now() + Duration::seconds(20);
+
     let claims = serde_json::json!({
+        "iss": config::CREDENTIAL_ISSUER,
         "sub": "test_user",
+        "aud": config::ACCESS_TOKEN_AUD,
+        "exp": expiration.timestamp(),
+        "iat": Utc::now().timestamp(),
         "scope": "credential_issue",
-        "exp": expiration.timestamp()
     });
     let encoding_key = get_encoding_key("ACCESS_TOKEN")?;
     generate_jwt(&claims, &encoding_key, None)
@@ -43,7 +47,7 @@ pub fn generate_test_access_token() -> Result<String, IssuerError> {
 
 pub fn generate_test_proof_jwt() -> Result<String, IssuerError> {
     info!("Generate test proof jwt");
-    let expiration = Utc::now() + Duration::hours(1);
+    let expiration = Utc::now() + Duration::seconds(20);
     let claims = serde_json::json!({
         "nonce": "test_nonce",
         "iat": Utc::now().timestamp(),
