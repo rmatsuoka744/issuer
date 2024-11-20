@@ -2,14 +2,15 @@ use crate::config;
 use crate::db::{get_client_secret_by_id, get_private_key_as_str, get_public_key_as_str};
 use crate::errors::IssuerError;
 use crate::models::{
-    CredentialRequest, CredentialResponse, ErrorResponse, Proof, SDJWTVerifiableCredential,
-    TokenRequest, TokenResponse, W3CVerifiableCredential,
+    CredentialRequest, CredentialResponse, ErrorResponse, SDJWTVerifiableCredential, TokenRequest,
+    TokenResponse, W3CVerifiableCredential,
 };
 use crate::user_data::USER_DATA;
+use crate::utils;
 use actix_web::{HttpRequest, HttpResponse};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, jwk, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use log::{debug, error, info};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -31,7 +32,7 @@ fn get_decoding_key(key_type: &str) -> Result<DecodingKey, IssuerError> {
 // テスト用のJWT生成関数
 pub fn generate_test_access_token() -> Result<String, IssuerError> {
     info!("Generate test access token");
-    let expiration = Utc::now() + Duration::seconds(20);
+    let expiration = Utc::now() + Duration::minutes(20);
 
     let claims = serde_json::json!({
         "iss": config::CREDENTIAL_ISSUER,
@@ -45,16 +46,19 @@ pub fn generate_test_access_token() -> Result<String, IssuerError> {
     generate_jwt(&claims, &encoding_key, None)
 }
 
-pub fn generate_test_proof_jwt() -> Result<String, IssuerError> {
+pub fn generate_test_proof_jwt(jwk: &jwk::Jwk) -> Result<String, IssuerError> {
     info!("Generate test proof jwt");
-    let expiration = Utc::now() + Duration::seconds(20);
+    let expiration = Utc::now() + Duration::minutes(20);
     let claims = serde_json::json!({
         "nonce": "test_nonce",
         "iat": Utc::now().timestamp(),
         "exp": expiration.timestamp()
     });
     let encoding_key = get_encoding_key("CLIENT_AUTH")?;
-    generate_jwt(&claims, &encoding_key, None)
+    let mut header = Header::new(Algorithm::EdDSA);
+    header.typ = Some("openid4vci-proof+jwt".to_string());
+    header.jwk = Some(jwk.clone());
+    generate_jwt(&claims, &encoding_key, Some(header))
 }
 
 // JWT生成の共通関数
@@ -120,17 +124,19 @@ pub fn validate_request(req: &CredentialRequest) -> Result<(), IssuerError> {
 }
 
 // 所有証明の検証関数
-pub fn verify_proof_of_possession(proof: &Proof) -> Result<(), IssuerError> {
-    // クライアントの公開鍵を取得
-    let client_public_key = get_public_key_as_str("CLIENT_AUTH").map_err(|_| {
-        IssuerError::PublicKeyLoadError("Failed to retrieve client public key".into())
-    })?;
+pub fn verify_proof_of_possession(body: &CredentialRequest) -> Result<(), IssuerError> {
+    // // クライアントの公開鍵を取得
+    // let client_public_key = get_public_key_as_str("CLIENT_AUTH").map_err(|_| {
+    //     IssuerError::PublicKeyLoadError("Failed to retrieve client public key".into())
+    // })?;
 
-    // 所有証明の検証
-    let decoding_key = DecodingKey::from_ed_pem(client_public_key.as_ref())
-        .map_err(|_| IssuerError::InvalidPublicKeyFormat)?;
+    // // 所有証明の検証
+    // let decoding_key = DecodingKey::from_ed_pem(client_public_key.as_ref())
+    //     .map_err(|_| IssuerError::InvalidPublicKeyFormat)?;
 
-    let claims = verify_jwt_with_key(&proof.jwt, &decoding_key)?;
+    let decoding_key = utils::get_decoding_key_from_jwk(body).unwrap();
+
+    let claims = verify_jwt_with_key(&body.proof.jwt, &decoding_key)?;
     debug!("Proof JWT successfully verified: {:?}", claims);
 
     let nonce = claims

@@ -25,6 +25,51 @@ sequenceDiagram
     Verifier->>Holder: 11. Confirm Holder's claim
 ```
 
+## CredentialリクエストからVC発行までの流れ(工事中...)
+
+```mermaid
+flowchart TD
+    A[Credentialリクエストを受信] --> B[アクセストークンの検証]
+    B -->|アクセストークンが無効| X[アクセストークン検証エラー]
+    B -->|アクセストークンが有効| C[リクエストボディの検証]
+
+    C --> D[Proof of Possession の検証]
+    D -->|Proof of Possesionが無効| Y[proof検証エラー]
+    D -->|Proof of Possesionが有効| E[format typesの検証]
+
+    E -->|format typesが無効| Z[format typesエラー]
+    E -->|format typesが有効| F[Credential発行]
+
+    F --> G[Credentialレスポンスを送信]
+
+    %% 詳細な処理記載
+    subgraph アクセストークンの検証
+        B --> B1[アクセストークンの JWT をデコード]
+        B1 --> B2[Issuer の公開鍵で署名検証]
+        B2 --> B3[aud, scope, exp のフィールドを確認]
+        B3 -->|検証成功| C
+    end
+
+    subgraph Proof of Possession の検証
+        D --> D1[Holder jwk の取得]
+        D1 -->|cnf.jwk がある| D3[jwk の取得成功]
+        D1 -->|cnf.jwk がない| D2[proof.jwt のヘッダーを検証]
+        D2 -->|ヘッダーに jwk がある| D3
+        D2 -->|ヘッダーに jwk がない| Y
+        D3 -->|jwk で proof.jwt の検証成功| E
+        D3 -->|jwk で proof.jwt の検証失敗| Y
+    end
+
+    subgraph format types の検証
+        E --> |format typesが有効| E1[Crendentialの生成]
+        E --> |format typesが無効| Z
+        E1 --> |W3C-VCを要求| E2[W3C-VCの生成]
+        E1 --> |SD-JWT-VCを要求| E3[SD-JWT-VCの生成]
+        E2 --> |生成が成功| F
+        E3 --> |生成が成功| F
+    end
+```
+
 ## 準拠仕様
 
 本実装は以下の仕様に準拠しています：

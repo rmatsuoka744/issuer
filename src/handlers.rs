@@ -34,7 +34,7 @@ pub async fn credential_endpoint(
     }
 
     // 所有証明の検証
-    if let Err(e) = verify_proof_of_possession(&body.proof) {
+    if let Err(e) = verify_proof_of_possession(&body) {
         error!("Proof of possession verification failed: {}", e);
         return map_issuer_error_to_response(e);
     }
