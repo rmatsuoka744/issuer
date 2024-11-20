@@ -69,6 +69,24 @@ pub enum IssuerError {
 
     #[error("Failed to generate access token: {0}")]
     AccessTokenGenerationError(String),
+
+    #[error("Invalid proof key")]
+    InvalidProofKey,
+
+    #[error("Invalid disclosure key format")]
+    InvalidDisclosureKeyFormat,
+
+    #[error("Disclosure hash does not match")]
+    DisclosureHashMismatch,
+
+    #[error("Invalid JWK format")]
+    InvalidJwkFormat,
+
+    #[error("Invalid proof JWT header")]
+    InvalidProofJwtHeader,
+
+    #[error("Invalid user data format")]
+    InvalidUserDataFormat,
 }
 
 // IssuerErrorをHTTPレスポンスにマッピングするヘルパー関数
@@ -142,6 +160,22 @@ pub fn map_issuer_error_to_response(error: IssuerError) -> HttpResponse {
         ),
         IssuerError::AccessTokenGenerationError(_) => HttpResponse::InternalServerError().json(
             ErrorResponse::new("server_error", "Failed to generate access token"),
+        ),
+
+        IssuerError::InvalidProofKey
+        | IssuerError::InvalidJwkFormat
+        | IssuerError::InvalidProofJwtHeader => HttpResponse::BadRequest().json(ErrorResponse::new(
+            "invalid_request",
+            "Invalid proof or key format",
+        )),
+
+        IssuerError::InvalidUserDataFormat => HttpResponse::InternalServerError().json(
+            ErrorResponse::new("server_error", "Invalid user data format"),
+        ),
+
+        IssuerError::InvalidDisclosureKeyFormat
+        | IssuerError::DisclosureHashMismatch => HttpResponse::BadRequest().json(
+            ErrorResponse::new("invalid_request", "Invalid disclosure data"),
         ),
     }
 }

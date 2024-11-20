@@ -36,14 +36,8 @@ pub fn generate_test_access_token() -> Result<String, IssuerError> {
     info!("Generate test access token");
     let expiration = Utc::now() + Duration::minutes(20);
 
-    let claims = serde_json::json!({
-        "iss": config::CREDENTIAL_ISSUER,
-        "sub": "test_user",
-        "aud": config::ACCESS_TOKEN_AUD,
-        "exp": expiration.timestamp(),
-        "iat": Utc::now().timestamp(),
-        "scope": "credential_issue",
-    });
+    let claims =
+        create_access_token_claims("test_user", "credential_issue", expiration.timestamp())?;
     let encoding_key = get_encoding_key("ACCESS_TOKEN")?;
     generate_jwt(&claims, &encoding_key, None)
 }
@@ -127,16 +121,8 @@ pub fn validate_request(req: &CredentialRequest) -> Result<(), IssuerError> {
 
 // 所有証明の検証関数
 pub fn verify_proof_of_possession(body: &CredentialRequest) -> Result<(), IssuerError> {
-    // // クライアントの公開鍵を取得
-    // let client_public_key = get_public_key_as_str("CLIENT_AUTH").map_err(|_| {
-    //     IssuerError::PublicKeyLoadError("Failed to retrieve client public key".into())
-    // })?;
-
-    // // 所有証明の検証
-    // let decoding_key = DecodingKey::from_ed_pem(client_public_key.as_ref())
-    //     .map_err(|_| IssuerError::InvalidPublicKeyFormat)?;
-
-    let decoding_key = utils::get_decoding_key_from_jwk(body).unwrap();
+    let decoding_key =
+        utils::get_decoding_key_from_jwk(body).map_err(|_| IssuerError::InvalidProofKey)?;
 
     let claims = verify_jwt_with_key(&body.proof.jwt, &decoding_key)?;
     debug!("Proof JWT successfully verified: {:?}", claims);
@@ -213,81 +199,47 @@ pub fn generate_sd_jwt_vc(
     info!("Generating SD-JWT VC");
 
     // 共通クレームを初期化
-    let mut claims = init_common_claims(config::CREDENTIAL_ISSUER);
+    let mut claims = initialize_sd_jwt_vc_claims()?;
 
-    // SD-JWT-VC固有のvctフィールドを追加
-    if let Some(vct) = USER_DATA.get("vct") {
-        claims["vct"] = vct.clone();
-    }
-    claims["_sd_alg"] = serde_json::json!("sha-256");
+    // 選択的開示のクレームを取得
+    let selective_claims = get_selective_claims(&USER_DATA)?;
 
-    debug!("{:?}", claims);
-
-    // USER_DATAから選択的開示のクレームを取得し、ハッシュ化とディスクロージャを生成
-    let selective_claims: Vec<(&str, serde_json::Value)> = USER_DATA
-        .as_object()
-        .unwrap()
-        .iter()
-        .filter(|(k, _)| *k != "vct") // vctは除外
-        .map(|(k, v)| (k.as_str(), v.clone()))
-        .collect();
-
-    let (_sd_jwt, disclosures, sd_hashes) = generate_sd_jwt(&claims, &selective_claims)
-        .map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?;
-    claims["_sd"] = serde_json::Value::Array(sd_hashes);
+    // 選択的開示の処理
+    let (disclosures, _) = process_selective_disclosures(&mut claims, &selective_claims)?;
 
     // Holder公開鍵がリクエストに含まれているかチェック
-    let jwk = if let Some(cnf) = &req.cnf {
-        debug!("Found jwk in req.cnf: {:?}", cnf);
-        Some(cnf.clone()) // Option<serde_json::Value> を返す
-    } else {
-        debug!("req.cnf not found, checking proof.jwt...");
-        // req.cnfが無ければproof.jwtのヘッダーを確認
-        match decode_header(&req.proof.jwt) {
-            Ok(header) => {
-                if let Some(jwk) = &header.jwk {
-                    debug!("Found jwk in proof.jwt header: {:?}", jwk);
-                    serde_json::to_value(jwk).ok() // Jwkをserde_json::Valueに変換してOptionで返す
-                } else {
-                    debug!("No jwk found in proof.jwt header.");
-                    None
-                }
-            }
-            Err(e) => {
-                debug!("Failed to decode proof.jwt header: {:?}", e);
-                None
-            }
-        }
-    };
+    let jwk = extract_holder_public_key(req)?;
 
     if let Some(jwk_value) = &jwk {
         claims["cnf"] = jwk_value.clone();
-    };
+    }
 
     // SD-JWTの署名とエンコード
-    let sd_jwt =
-        sign_sd_jwt(&claims).map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?;
+    let sd_jwt = sign_sd_jwt(&claims)?;
 
     // SD-JWT-VCの検証
     verify_sd_jwt(&sd_jwt)?;
 
-    // 公開鍵（JWK）情報がある場合は`cnf`フィールドに追加し、Key Binding JWTを生成
-    let key_binding_jwt = if let Some(jwk_value) = jwk {
-        debug!("Generating Key Binding JWT with jwk: {:?}", jwk_value);
-        Some(
-            generate_key_binding_jwt(&sd_jwt)
-                .map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?,
-        )
-    } else {
-        debug!("No jwk found. Skipping Key Binding JWT generation.");
-        None
-    };
+    // Key Binding JWTの生成
+    let key_binding_jwt = generate_optional_key_binding_jwt(jwk.as_ref(), &sd_jwt)?;
 
     Ok(SDJWTVerifiableCredential {
         sd_jwt,
         disclosures,
         key_binding_jwt,
     })
+}
+
+pub fn _create_sdjwt_response(vc: &SDJWTVerifiableCredential) -> String {
+    let mut comp = vec![vc.sd_jwt.clone()];
+    // disclosuresを追加
+    comp.extend(vc.disclosures.clone());
+    // key_binding_jwtを追加（存在する場合）
+    if let Some(key_binding_jwt) = &vc.key_binding_jwt {
+        comp.push(key_binding_jwt.clone());
+    }
+    // ~で連結
+    comp.join("~")
 }
 
 // SD-JWTの署名関数
@@ -302,11 +254,10 @@ fn sign_sd_jwt(claims: &Value) -> Result<String, IssuerError> {
 }
 
 // 選択的開示とハッシュ化関数
-fn generate_sd_jwt(
-    claims: &Value,
+fn process_selective_disclosures(
+    claims: &mut Value,
     selective_claims: &[(&str, Value)],
-) -> Result<(String, Vec<String>, Vec<Value>), IssuerError> {
-    let mut jwt_claims = claims.clone();
+) -> Result<(Vec<String>, Vec<Value>), IssuerError> {
     let mut disclosures = Vec::new();
     let mut sd_hashes = Vec::new();
 
@@ -315,12 +266,12 @@ fn generate_sd_jwt(
         let disclosure = format!("[\"{}\", \"{}\", {}]", salt, key, value);
         let encoded_disclosure = general_purpose::URL_SAFE_NO_PAD.encode(&disclosure);
         let hash = hash_disclosure(&disclosure);
-        jwt_claims["vc"]["credentialSubject"][*key] = Value::String(hash.clone());
         disclosures.push(encoded_disclosure);
         sd_hashes.push(Value::String(hash));
     }
 
-    Ok((jwt_claims.to_string(), disclosures, sd_hashes))
+    claims["_sd"] = serde_json::Value::Array(sd_hashes.clone());
+    Ok((disclosures, sd_hashes))
 }
 
 fn generate_key_binding_jwt(sd_jwt: &str) -> Result<String, IssuerError> {
@@ -335,10 +286,10 @@ fn generate_key_binding_jwt(sd_jwt: &str) -> Result<String, IssuerError> {
 
     // Key Binding JWTのペイロードを作成
     let claims = serde_json::json!({
-        "nonce": generate_salt(),         // 一意のノンスを生成
-        "aud": config::KEY_BINDING_AUD, // Verifierの識別子
-        "iat": Utc::now().timestamp(),    // 発行時刻
-        "sd_hash": sd_hash                // SD-JWTのハッシュ値
+        "nonce": generate_salt(),
+        "aud": config::KEY_BINDING_AUD,
+        "iat": Utc::now().timestamp(),
+        "sd_hash": sd_hash
     });
 
     // SD-JWTの発行時に利用したのと同じキーで署名
@@ -370,6 +321,15 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, IssuerError> {
     let decoding_key = get_decoding_key("CREDENTIAL_ISSUE")?;
     let mut claims = verify_jwt_with_key(&jwt, &decoding_key)?;
 
+    // ディスクロージャの処理
+    process_disclosures(&mut claims, disclosures)?;
+
+    info!("Verified SD-JWT-VC!");
+    Ok(claims)
+}
+
+// ディスクロージャの処理関数
+fn process_disclosures(claims: &mut Value, disclosures: &[&str]) -> Result<(), IssuerError> {
     for disclosure in disclosures {
         let decoded = general_purpose::URL_SAFE_NO_PAD
             .decode(disclosure)
@@ -383,15 +343,21 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, IssuerError> {
             disclosure_json.get(1),
             disclosure_json.get(2),
         ) {
-            let disclosure_str = format!("[\"{}\", \"{}\", {}]", salt, key, value);
+            let key_str = key
+                .as_str()
+                .ok_or(IssuerError::InvalidDisclosureKeyFormat)?;
+            let disclosure_str = format!("[\"{}\", \"{}\", {}]", salt, key_str, value);
             let hash = hash_disclosure(&disclosure_str);
-            if claims[key.as_str().unwrap()] == Value::String(hash.clone()) {
-                claims[key.as_str().unwrap()] = value.clone();
+            if claims[key_str] == Value::String(hash.clone()) {
+                claims[key_str] = value.clone();
+            } else {
+                return Err(IssuerError::DisclosureHashMismatch);
             }
+        } else {
+            return Err(IssuerError::InvalidDisclosureFormat);
         }
     }
-    info!("Verified SD-JWT-VC!");
-    Ok(claims)
+    Ok(())
 }
 
 // トークンエンドポイント関連の関数
@@ -440,14 +406,7 @@ pub fn generate_access_token(
         return Err(IssuerError::InvalidScopeValue);
     }
 
-    let claims = serde_json::json!({
-        "iss": config::CREDENTIAL_ISSUER,
-        "sub": client_id,
-        "aud": config::ACCESS_TOKEN_AUD,
-        "exp": (now + expires_in).timestamp(),
-        "iat": now.timestamp(),
-        "scope": scope,
-    });
+    let claims = create_access_token_claims(client_id, &scope, (now + expires_in).timestamp())?;
 
     let encoding_key = get_encoding_key("ACCESS_TOKEN")?;
     let access_token = generate_jwt(&claims, &encoding_key, None)
@@ -462,6 +421,22 @@ pub fn generate_access_token(
         c_nonce: Uuid::new_v4().to_string(),
         c_nonce_expires_in: 300,
     })
+}
+
+// アクセストークンクレームの作成関数
+fn create_access_token_claims(
+    client_id: &str,
+    scope: &str,
+    expiration: i64,
+) -> Result<Value, IssuerError> {
+    Ok(serde_json::json!({
+        "iss": config::CREDENTIAL_ISSUER,
+        "sub": client_id,
+        "aud": config::ACCESS_TOKEN_AUD,
+        "exp": expiration,
+        "iat": Utc::now().timestamp(),
+        "scope": scope,
+    }))
 }
 
 pub fn process_credential_request(
@@ -525,5 +500,67 @@ pub fn extract_token(req: &HttpRequest) -> Result<String, HttpResponse> {
             "invalid_token",
             "Missing Authorization header",
         ))),
+    }
+}
+
+// ユーティリティ関数
+fn extract_holder_public_key(req: &CredentialRequest) -> Result<Option<Value>, IssuerError> {
+    if let Some(cnf) = &req.cnf {
+        debug!("Found jwk in req.cnf: {:?}", cnf);
+        Ok(Some(cnf.clone()))
+    } else {
+        debug!("req.cnf not found, checking proof.jwt...");
+        match decode_header(&req.proof.jwt) {
+            Ok(header) => {
+                if let Some(jwk) = &header.jwk {
+                    debug!("Found jwk in proof.jwt header: {:?}", jwk);
+                    serde_json::to_value(jwk)
+                        .map(Some)
+                        .map_err(|_| IssuerError::InvalidJwkFormat)
+                } else {
+                    debug!("No jwk found in proof.jwt header.");
+                    Ok(None)
+                }
+            }
+            Err(_) => {
+                debug!("Failed to decode proof.jwt header.");
+                Err(IssuerError::InvalidProofJwtHeader)
+            }
+        }
+    }
+}
+
+fn get_selective_claims(user_data: &Value) -> Result<Vec<(&str, Value)>, IssuerError> {
+    let user_data_map = user_data
+        .as_object()
+        .ok_or(IssuerError::InvalidUserDataFormat)?;
+    Ok(user_data_map
+        .iter()
+        .filter(|(k, _)| *k != "vct")
+        .map(|(k, v)| (k.as_str(), v.clone()))
+        .collect())
+}
+
+fn initialize_sd_jwt_vc_claims() -> Result<Value, IssuerError> {
+    let mut claims = init_common_claims(config::CREDENTIAL_ISSUER);
+    if let Some(vct) = USER_DATA.get("vct") {
+        claims["vct"] = vct.clone();
+    }
+    claims["_sd_alg"] = Value::String("sha-256".to_string());
+    Ok(claims)
+}
+
+fn generate_optional_key_binding_jwt(
+    jwk_value: Option<&Value>,
+    sd_jwt: &str,
+) -> Result<Option<String>, IssuerError> {
+    if let Some(_jwk_value) = jwk_value {
+        debug!("Generating Key Binding JWT");
+        let key_binding_jwt = generate_key_binding_jwt(sd_jwt)
+            .map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?;
+        Ok(Some(key_binding_jwt))
+    } else {
+        debug!("No jwk found. Skipping Key Binding JWT generation.");
+        Ok(None)
     }
 }
