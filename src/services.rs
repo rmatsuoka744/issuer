@@ -10,7 +10,9 @@ use crate::utils;
 use actix_web::{HttpRequest, HttpResponse};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, jwk, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{
+    decode, decode_header, encode, jwk, Algorithm, DecodingKey, EncodingKey, Header, Validation,
+};
 use log::{debug, error, info};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -235,10 +237,32 @@ pub fn generate_sd_jwt_vc(
     claims["_sd"] = serde_json::Value::Array(sd_hashes);
 
     // Holder公開鍵がリクエストに含まれているかチェック
-    if let Some(jwk) = &req.cnf {
-        claims["cnf"] = jwk.clone();
-        info!("Added cnf field to claims: {:?}", jwk);
-    }
+    let jwk = if let Some(cnf) = &req.cnf {
+        debug!("Found jwk in req.cnf: {:?}", cnf);
+        Some(cnf.clone()) // Option<serde_json::Value> を返す
+    } else {
+        debug!("req.cnf not found, checking proof.jwt...");
+        // req.cnfが無ければproof.jwtのヘッダーを確認
+        match decode_header(&req.proof.jwt) {
+            Ok(header) => {
+                if let Some(jwk) = &header.jwk {
+                    debug!("Found jwk in proof.jwt header: {:?}", jwk);
+                    serde_json::to_value(jwk).ok() // Jwkをserde_json::Valueに変換してOptionで返す
+                } else {
+                    debug!("No jwk found in proof.jwt header.");
+                    None
+                }
+            }
+            Err(e) => {
+                debug!("Failed to decode proof.jwt header: {:?}", e);
+                None
+            }
+        }
+    };
+
+    if let Some(jwk_value) = &jwk {
+        claims["cnf"] = jwk_value.clone();
+    };
 
     // SD-JWTの署名とエンコード
     let sd_jwt =
@@ -248,12 +272,14 @@ pub fn generate_sd_jwt_vc(
     verify_sd_jwt(&sd_jwt)?;
 
     // 公開鍵（JWK）情報がある場合は`cnf`フィールドに追加し、Key Binding JWTを生成
-    let key_binding_jwt = if let Some(_) = &req.cnf {
+    let key_binding_jwt = if let Some(jwk_value) = jwk {
+        debug!("Generating Key Binding JWT with jwk: {:?}", jwk_value);
         Some(
             generate_key_binding_jwt(&sd_jwt)
                 .map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?,
         )
     } else {
+        debug!("No jwk found. Skipping Key Binding JWT generation.");
         None
     };
 
