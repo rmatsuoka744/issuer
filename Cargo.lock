@@ -13,6 +13,7 @@ dependencies = [
  "jsonwebtoken",
  "lazy_static",
  "log",
+ "rand",
  "rusqlite",
  "serde",
  "serde_json",

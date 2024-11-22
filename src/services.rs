@@ -303,7 +303,8 @@ fn generate_salt() -> String {
 
 fn hash_disclosure(disclosure: &str) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(disclosure);
+    let base64_disclosure = general_purpose::URL_SAFE_NO_PAD.encode(disclosure);
+    hasher.update(base64_disclosure);
     let result = hasher.finalize();
     general_purpose::URL_SAFE_NO_PAD.encode(result)
 }
@@ -546,7 +547,7 @@ fn initialize_sd_jwt_vc_claims() -> Result<Value, IssuerError> {
     if let Some(vct) = USER_DATA.get("vct") {
         claims["vct"] = vct.clone();
     }
-    claims["_sd_alg"] = Value::String("sha-256".to_string());
+    claims["_sd_alg"] = Value::String("SHA-256".to_string());
     Ok(claims)
 }
 
