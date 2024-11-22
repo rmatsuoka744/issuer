@@ -1,7 +1,7 @@
-use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+use base64::engine::general_purpose::{self, STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine;
 use jsonwebtoken::jwk::{
-    AlgorithmParameters, CommonParameters, EllipticCurve, Jwk as JwtJwk, OctetKeyPairParameters,
+    AlgorithmParameters, CommonParameters, EllipticCurve, EllipticCurveKeyParameters, Jwk, OctetKeyPairParameters,
     OctetKeyPairType, PublicKeyUse,
 };
 use jsonwebtoken::{decode_header, DecodingKey};
@@ -11,7 +11,7 @@ use serde_json::json;
 use crate::models::CredentialRequest;
 
 /// PEM形式の公開鍵をJWK形式に変換 (returns jsonwebtoken::jwk::Jwk)
-pub fn from_pem_to_jwk(pem: &str) -> Result<JwtJwk, String> {
+pub fn from_pem_to_jwk(pem: &str) -> Result<Jwk, String> {
     debug!("Converting PEM to JWK...");
 
     // PEMのヘッダー/フッターを削除してBase64部分を抽出
@@ -59,7 +59,7 @@ pub fn from_pem_to_jwk(pem: &str) -> Result<JwtJwk, String> {
         };
 
         // JWKを作成
-        let jwk = JwtJwk {
+        let jwk = Jwk {
             common,
             algorithm: AlgorithmParameters::OctetKeyPair(params),
         };
@@ -75,8 +75,59 @@ pub fn from_pem_to_jwk(pem: &str) -> Result<JwtJwk, String> {
     ))
 }
 
+/// PEM形式のP-256公開鍵をJWK形式に変換
+pub fn from_pem_to_jwk_p256(pem: &str) -> Result<Jwk, String> {
+    // PEMのヘッダー/フッターを削除してBase64部分を抽出
+    let base64_data: String = pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+
+    // Base64デコード
+    let decoded = general_purpose::STANDARD.decode(&base64_data).unwrap();
+
+    // 公開鍵のx, y座標を抽出
+    if decoded.len() < 91 {
+        return Err("Invalid P-256 public key length".into());
+    }
+    let x_bytes = &decoded[27..59];
+    let y_bytes = &decoded[59..91];
+
+    // x, y座標をBase64URLエンコード
+    let x = general_purpose::URL_SAFE_NO_PAD.encode(x_bytes);
+    let y = general_purpose::URL_SAFE_NO_PAD.encode(y_bytes);
+
+    // 共通パラメータを設定
+    let common = CommonParameters {
+        public_key_use: Some(PublicKeyUse::Signature),
+        key_operations: None,
+        algorithm: None,
+        key_id: None,
+        x509_url: None,
+        x509_chain: None,
+        x509_sha1_fingerprint: None,
+        x509_sha256_fingerprint: None,
+    };
+
+    // EllipticCurveKeyParametersを設定
+    let params = EllipticCurveKeyParameters {
+        key_type: jsonwebtoken::jwk::EllipticCurveKeyType::EC,
+        curve: EllipticCurve::P256,
+        x,
+        y,
+    };
+
+    // JWKを作成
+    let jwk = Jwk {
+        common,
+        algorithm: AlgorithmParameters::EllipticCurve(params),
+    };
+
+    Ok(jwk)
+}
+
 /// JWK形式の公開鍵をPEM形式に変換
-pub fn from_jwk_to_pem(jwk: &JwtJwk) -> Result<String, String> {
+pub fn from_jwk_to_pem(jwk: &Jwk) -> Result<String, String> {
     // 公開鍵を取得
     let (_kty, _crv, x) = {
         let common = &jwk.common;
@@ -133,7 +184,7 @@ pub fn from_jwk_to_pem(jwk: &JwtJwk) -> Result<String, String> {
 }
 
 /// JWKオブジェクトをserde_json::Valueに変換
-pub fn from_jwk_to_value(jwk: &JwtJwk) -> Result<String, String> {
+pub fn from_jwk_to_value(jwk: &Jwk) -> Result<String, String> {
     debug!("Converting JWK to serde_json::Value...");
 
     // 共通パラメータとアルゴリズムパラメータの確認
@@ -189,6 +240,61 @@ pub fn from_jwk_to_value(jwk: &JwtJwk) -> Result<String, String> {
     serde_json::to_string(&jwk_json).map_err(|e| format!("Error serializing JSON: {}", e))
 }
 
+/// P-256専用: JWKオブジェクトをserde_json::Valueに変換
+pub fn from_jwk_to_value_p256(jwk: &Jwk) -> Result<String, String> {
+    debug!("Converting P-256 JWK to serde_json::Value...");
+
+    // 共通パラメータとアルゴリズムパラメータの確認
+    let (kty, alg, crv, x, y, use_field) = {
+        let common = &jwk.common;
+        let algorithm = &jwk.algorithm;
+
+        // 公開鍵の利用がSignatureであることを確認
+        let use_field = match common.public_key_use {
+            Some(PublicKeyUse::Signature) => "sig",
+            _ => {
+                return Err("Unsupported public key use in JWK. Expected 'sig'.".to_string());
+            }
+        };
+
+        // EllipticCurveパラメータの確認
+        let (kty, crv, x, y) = match algorithm {
+            AlgorithmParameters::EllipticCurve(params) => {
+                // キータイプと曲線がECおよびP-256であることを確認
+                if params.key_type != jsonwebtoken::jwk::EllipticCurveKeyType::EC {
+                    return Err("Unsupported key type in JWK. Expected 'EC'.".to_string());
+                }
+
+                if params.curve != EllipticCurve::P256 {
+                    return Err("Unsupported curve in JWK. Expected 'P-256'.".to_string());
+                }
+
+                ("EC", "P-256", params.x.clone(), params.y.clone())
+            }
+            _ => {
+                return Err(
+                    "Unsupported algorithm parameters in JWK. Expected EllipticCurve.".to_string(),
+                )
+            }
+        };
+
+        (kty, "ES256", crv, x, y, use_field)
+    };
+
+    // JSONオブジェクトを作成
+    let jwk_json = json!({
+        "kty": kty,
+        "alg": alg,
+        "crv": crv,
+        "x": x,
+        "y": y,
+        "use": use_field,
+    });
+
+    // 文字列として返す
+    serde_json::to_string(&jwk_json).map_err(|e| format!("Error serializing JSON: {}", e))
+}
+
 pub fn get_decoding_key_from_jwk(body: &CredentialRequest) -> Result<DecodingKey, String> {
     // 1. cnfがSomeか確認してjwkを取得
     if let Some(cnf) = &body.cnf {
@@ -196,7 +302,7 @@ pub fn get_decoding_key_from_jwk(body: &CredentialRequest) -> Result<DecodingKey
             debug!("Extracted cnf.jwk: {:?}", jwk_value);
 
             // jwk_valueをJwkオブジェクトに変換
-            let jwk: JwtJwk = serde_json::from_value(jwk_value.clone())
+            let jwk: Jwk = serde_json::from_value(jwk_value.clone())
                 .map_err(|e| format!("Failed to parse JWK from 'cnf.jwk': {}", e))?;
             return DecodingKey::from_jwk(&jwk)
                 .map_err(|e| format!("Failed to create DecodingKey: {}", e));

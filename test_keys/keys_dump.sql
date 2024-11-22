@@ -12,6 +12,7 @@ INSERT INTO keys VALUES('CREDENTIAL_ISSUE','private',replace('-----BEGIN PRIVATE
 INSERT INTO keys VALUES('CREDENTIAL_ISSUE','public',replace('-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAJGHX24gW9He0joDXvC7svAOn1Q1I5oYCOm6iyURT2yU=\n-----END PUBLIC KEY-----','\n',char(10)));
 INSERT INTO keys VALUES('CLIENT_AUTH','private',replace('-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEICx0APn5wkON0h5KtHHECI8Wv9zGV+G9yvZxQYu7acWz\n-----END PRIVATE KEY-----','\n',char(10)));
 INSERT INTO keys VALUES('CLIENT_AUTH','public',replace('-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA+w76fv0jlTZo3H6mtdcJrJZfJ4Ltm2MJi09V/zxM3Vo=\n-----END PUBLIC KEY-----','\n',char(10)));
+INSERT INTO keys VALUES('p256','public',replace('-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEuFfWDWJiruoiUnRYEGMa/m4eWzAT\nSDJZbNV77oucCvlcm0v98J73rR7lzlnMif0InGli73uocRdn5ifaoeV7pQ==\n-----END PUBLIC KEY-----','\n',char(10)));
 CREATE TABLE clients (
     client_id TEXT PRIMARY KEY,
     client_secret TEXT NOT NULL
