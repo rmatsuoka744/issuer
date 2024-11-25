@@ -22,15 +22,15 @@ use uuid::Uuid;
 fn get_encoding_key(key_type: &str) -> Result<EncodingKey, IssuerError> {
     let private_key = get_private_key_as_str(key_type)
         .map_err(|_| IssuerError::PrivateKeyLoadError(key_type.to_string()))?;
-    // EncodingKey::from_ed_pem(private_key.as_ref()).map_err(|_| IssuerError::InvalidPrivateKeyFormat)
-    EncodingKey::from_ec_pem(private_key.as_ref()).map_err(|_| IssuerError::InvalidPrivateKeyFormat)
+    EncodingKey::from_ec_pem(private_key.as_ref())
+        .map_err(|e| IssuerError::InvalidPrivateKeyFormat(e.to_string()))
 }
 
 fn get_decoding_key(key_type: &str) -> Result<DecodingKey, IssuerError> {
     let public_key = get_public_key_as_str(key_type)
         .map_err(|_| IssuerError::PublicKeyLoadError(key_type.to_string()))?;
-    // DecodingKey::from_ed_pem(public_key.as_ref()).map_err(|_| IssuerError::InvalidPublicKeyFormat)
-    DecodingKey::from_ec_pem(public_key.as_ref()).map_err(|_| IssuerError::InvalidPublicKeyFormat)
+    DecodingKey::from_ec_pem(public_key.as_ref())
+        .map_err(|e| IssuerError::InvalidPublicKeyFormat(e.to_string()))
 }
 
 // テスト用のJWT生成関数
@@ -142,6 +142,25 @@ pub fn verify_proof_of_possession(body: &CredentialRequest) -> Result<(), Issuer
     }
 }
 
+// ノンス関連の関数
+pub fn generate_nonce() -> (String, u64) {
+    info!("Generating nonce");
+    let nonce = generate_salt();
+    store_nonce(&nonce, config::NONCE_EXPIRATION);
+    info!("Nonce generated successfully");
+    (nonce, config::NONCE_EXPIRATION)
+}
+
+fn verify_nonce(_nonce: &str) -> bool {
+    // TODO: Implement nonce verification with actual storage
+    true
+}
+
+fn store_nonce(nonce: &str, _expires_in: u64) {
+    debug!("Storing nonce: {}", nonce);
+    // TODO: Implement nonce storage mechanism
+}
+
 // タイムスタンプ生成の共通関数
 fn generate_timestamps() -> (i64, i64) {
     let now = Utc::now();
@@ -175,25 +194,6 @@ pub fn generate_credential(req: &CredentialRequest) -> Result<String, IssuerErro
     Ok(jwt)
 }
 
-// ノンス関連の関数
-pub fn generate_nonce() -> (String, u64) {
-    info!("Generating nonce");
-    let nonce = generate_salt();
-    store_nonce(&nonce, config::NONCE_EXPIRATION);
-    info!("Nonce generated successfully");
-    (nonce, config::NONCE_EXPIRATION)
-}
-
-fn verify_nonce(_nonce: &str) -> bool {
-    // 実際の実装ではストレージからノンスを取得し、有効期限を確認
-    true
-}
-
-fn store_nonce(nonce: &str, _expires_in: u64) {
-    debug!("Storing nonce: {}", nonce);
-    // 実際の実装ではデータベースなどにノンスを保存
-}
-
 // SD-JWT-VC生成関数
 pub fn generate_sd_jwt_vc(
     req: &CredentialRequest,
@@ -201,26 +201,40 @@ pub fn generate_sd_jwt_vc(
     info!("Generating SD-JWT VC");
 
     // 共通クレームを初期化
-    let mut claims = initialize_sd_jwt_vc_claims()?;
+    let mut claims = initialize_sd_jwt_vc_claims().map_err(|e| {
+        IssuerError::SdJwtVcGenerationError(format!("Failed to initialize claims: {}", e))
+    })?;
 
     // 選択的開示のクレームを取得
-    let selective_claims = get_selective_claims(&USER_DATA)?;
+    let selective_claims = get_selective_claims(&USER_DATA).map_err(|e| {
+        IssuerError::SdJwtVcGenerationError(format!("Failed to get selective claims: {}", e))
+    })?;
 
     // 選択的開示の処理
-    let (disclosures, _) = process_selective_disclosures(&mut claims, &selective_claims)?;
+    let (disclosures, _) =
+        process_selective_disclosures(&mut claims, &selective_claims).map_err(|e| {
+            IssuerError::SdJwtVcGenerationError(format!(
+                "Failed to process selective disclosures: {}",
+                e
+            ))
+        })?;
 
     // Holder公開鍵がリクエストに含まれているかチェック
-    let jwk = extract_holder_public_key(req)?;
-
-    if let Some(jwk_value) = &jwk {
-        claims["cnf"] = jwk_value.clone();
+    if let Some(jwk_value) = extract_holder_public_key(req).map_err(|e| {
+        IssuerError::SdJwtVcGenerationError(format!("Failed to extract holder public key: {}", e))
+    })? {
+        claims["cnf"] = jwk_value;
     }
 
     // SD-JWTの署名とエンコード
-    let sd_jwt = sign_sd_jwt(&claims)?;
+    let sd_jwt = sign_sd_jwt(&claims).map_err(|e| {
+        IssuerError::SdJwtVcGenerationError(format!("Failed to sign SD-JWT: {}", e))
+    })?;
 
     // SD-JWT-VCの検証
-    verify_sd_jwt(&sd_jwt)?;
+    verify_sd_jwt(&sd_jwt).map_err(|e| {
+        IssuerError::SdJwtVcGenerationError(format!("Failed to verify SD-JWT: {}", e))
+    })?;
 
     Ok(SDJWTVerifiableCredential {
         sd_jwt,
@@ -257,9 +271,11 @@ fn process_selective_disclosures(
 
     for (key, value) in selective_claims {
         let salt = generate_salt();
-        let disclosure = format!("[\"{}\", \"{}\", {}]", salt, key, value);
-        let encoded_disclosure = general_purpose::URL_SAFE_NO_PAD.encode(&disclosure);
-        let hash = hash_disclosure(&disclosure);
+        let disclosure_value = serde_json::json!([salt, key, value]);
+        let disclosure_str = serde_json::to_string(&disclosure_value)
+            .map_err(|e| IssuerError::InvalidDisclosureFormat(e.to_string()))?;
+        let encoded_disclosure = general_purpose::URL_SAFE_NO_PAD.encode(&disclosure_str);
+        let hash = hash_disclosure(&encoded_disclosure);
         disclosures.push(encoded_disclosure);
         sd_hashes.push(Value::String(hash));
     }
@@ -272,26 +288,25 @@ fn generate_salt() -> String {
     Uuid::new_v4().to_string()
 }
 
-fn hash_disclosure(disclosure: &str) -> String {
+fn hash_disclosure(encoded_disclosure: &str) -> String {
     let mut hasher = Sha256::new();
-    let base64_disclosure = general_purpose::URL_SAFE_NO_PAD.encode(disclosure);
-    hasher.update(base64_disclosure);
+    hasher.update(encoded_disclosure.as_bytes());
     let result = hasher.finalize();
     general_purpose::URL_SAFE_NO_PAD.encode(result)
 }
 
 pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, IssuerError> {
     info!("Verify SD-JWT");
-    let parts: Vec<&str> = sd_jwt.split('.').collect();
-    if parts.len() < 2 {
+    let parts: Vec<&str> = sd_jwt.split('~').collect();
+    if parts.is_empty() {
         return Err(IssuerError::InvalidSdJwtFormat);
     }
 
-    let jwt = parts[0..3].join(".");
-    let disclosures = &parts[3..];
+    let jwt = parts[0];
+    let disclosures = &parts[1..];
 
     let decoding_key = get_decoding_key("CREDENTIAL_ISSUE_p256")?;
-    let mut claims = verify_jwt_with_key(&jwt, &decoding_key)?;
+    let mut claims = verify_jwt_with_key(jwt, &decoding_key)?;
 
     // ディスクロージャの処理
     process_disclosures(&mut claims, disclosures)?;
@@ -305,28 +320,36 @@ fn process_disclosures(claims: &mut Value, disclosures: &[&str]) -> Result<(), I
     for disclosure in disclosures {
         let decoded = general_purpose::URL_SAFE_NO_PAD
             .decode(disclosure)
-            .map_err(|_| IssuerError::InvalidDisclosureEncoding)?;
+            .map_err(|e| IssuerError::InvalidDisclosureEncoding(e.to_string()))?;
 
-        let disclosure_json: Value =
-            serde_json::from_slice(&decoded).map_err(|_| IssuerError::InvalidDisclosureFormat)?;
+        let disclosure_value: Value = serde_json::from_slice(&decoded)
+            .map_err(|e| IssuerError::InvalidDisclosureFormat(e.to_string()))?;
 
-        if let (Some(salt), Some(key), Some(value)) = (
-            disclosure_json.get(0),
-            disclosure_json.get(1),
-            disclosure_json.get(2),
-        ) {
-            let key_str = key
-                .as_str()
-                .ok_or(IssuerError::InvalidDisclosureKeyFormat)?;
-            let disclosure_str = format!("[\"{}\", \"{}\", {}]", salt, key_str, value);
-            let hash = hash_disclosure(&disclosure_str);
-            if claims[key_str] == Value::String(hash.clone()) {
-                claims[key_str] = value.clone();
+        if let Some(array) = disclosure_value.as_array() {
+            if array.len() != 3 {
+                return Err(IssuerError::InvalidDisclosureFormat(
+                    "Invalid array length".to_string(),
+                ));
+            }
+            let key = array[1].as_str().ok_or_else(|| {
+                IssuerError::InvalidDisclosureKeyFormat("Key is not a string".to_string())
+            })?;
+            let value = &array[2];
+
+            let disclosure_str = serde_json::to_string(&disclosure_value)
+                .map_err(|e| IssuerError::InvalidDisclosureFormat(e.to_string()))?;
+            let encoded_disclosure = general_purpose::URL_SAFE_NO_PAD.encode(&disclosure_str);
+            let hash = hash_disclosure(&encoded_disclosure);
+
+            if claims[key] == Value::String(hash.clone()) {
+                claims[key] = value.clone();
             } else {
                 return Err(IssuerError::DisclosureHashMismatch);
             }
         } else {
-            return Err(IssuerError::InvalidDisclosureFormat);
+            return Err(IssuerError::InvalidDisclosureFormat(
+                "Disclosure is not an array".to_string(),
+            ));
         }
     }
     Ok(())
@@ -360,7 +383,7 @@ pub fn authenticate_client(client_id: &str, client_secret: &str) -> Result<(), I
 pub fn validate_grant_type(grant_type: &str) -> Result<(), IssuerError> {
     if grant_type != "client_credentials" {
         error!("Unsupported grant type: {}", grant_type);
-        Err(IssuerError::UnsupportedGrantType)
+        Err(IssuerError::UnsupportedGrantType(grant_type.to_string()))
     } else {
         Ok(())
     }
@@ -375,7 +398,7 @@ pub fn generate_access_token(
     let scope = scope.unwrap_or("credential_issue").to_string();
 
     if scope != "credential_issue" {
-        return Err(IssuerError::InvalidScopeValue);
+        return Err(IssuerError::InvalidScopeValue(scope));
     }
 
     let claims = create_access_token_claims(client_id, &scope, (now + expires_in).timestamp())?;
@@ -488,15 +511,15 @@ fn extract_holder_public_key(req: &CredentialRequest) -> Result<Option<Value>, I
                     debug!("Found jwk in proof.jwt header: {:?}", jwk);
                     serde_json::to_value(jwk)
                         .map(Some)
-                        .map_err(|_| IssuerError::InvalidJwkFormat)
+                        .map_err(|e| IssuerError::InvalidJwkFormat(e.to_string()))
                 } else {
                     debug!("No jwk found in proof.jwt header.");
                     Ok(None)
                 }
             }
-            Err(_) => {
-                debug!("Failed to decode proof.jwt header.");
-                Err(IssuerError::InvalidProofJwtHeader)
+            Err(e) => {
+                debug!("Failed to decode proof.jwt header: {}", e);
+                Err(IssuerError::InvalidProofJwtHeader(e.to_string()))
             }
         }
     }
