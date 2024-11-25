@@ -22,13 +22,15 @@ use uuid::Uuid;
 fn get_encoding_key(key_type: &str) -> Result<EncodingKey, IssuerError> {
     let private_key = get_private_key_as_str(key_type)
         .map_err(|_| IssuerError::PrivateKeyLoadError(key_type.to_string()))?;
-    EncodingKey::from_ed_pem(private_key.as_ref()).map_err(|_| IssuerError::InvalidPrivateKeyFormat)
+    // EncodingKey::from_ed_pem(private_key.as_ref()).map_err(|_| IssuerError::InvalidPrivateKeyFormat)
+    EncodingKey::from_ec_pem(private_key.as_ref()).map_err(|_| IssuerError::InvalidPrivateKeyFormat)
 }
 
 fn get_decoding_key(key_type: &str) -> Result<DecodingKey, IssuerError> {
     let public_key = get_public_key_as_str(key_type)
         .map_err(|_| IssuerError::PublicKeyLoadError(key_type.to_string()))?;
-    DecodingKey::from_ed_pem(public_key.as_ref()).map_err(|_| IssuerError::InvalidPublicKeyFormat)
+    // DecodingKey::from_ed_pem(public_key.as_ref()).map_err(|_| IssuerError::InvalidPublicKeyFormat)
+    DecodingKey::from_ec_pem(public_key.as_ref()).map_err(|_| IssuerError::InvalidPublicKeyFormat)
 }
 
 // テスト用のJWT生成関数
@@ -38,7 +40,7 @@ pub fn generate_test_access_token() -> Result<String, IssuerError> {
 
     let claims =
         create_access_token_claims("test_user", "credential_issue", expiration.timestamp())?;
-    let encoding_key = get_encoding_key("ACCESS_TOKEN")?;
+    let encoding_key = get_encoding_key("ACCESS_TOKEN_p256")?;
     generate_jwt(&claims, &encoding_key, None)
 }
 
@@ -50,8 +52,8 @@ pub fn generate_test_proof_jwt(jwk: &jwk::Jwk) -> Result<String, IssuerError> {
         "iat": Utc::now().timestamp(),
         "exp": expiration.timestamp()
     });
-    let encoding_key = get_encoding_key("CLIENT_AUTH")?;
-    let mut header = Header::new(Algorithm::EdDSA);
+    let encoding_key = get_encoding_key("CLIENT_AUTH_p256")?;
+    let mut header = Header::new(Algorithm::ES256);
     header.typ = Some("openid4vci-proof+jwt".to_string());
     header.jwk = Some(jwk.clone());
     generate_jwt(&claims, &encoding_key, Some(header))
@@ -63,13 +65,13 @@ fn generate_jwt(
     encoding_key: &EncodingKey,
     header: Option<Header>,
 ) -> Result<String, IssuerError> {
-    let header = header.unwrap_or_else(|| Header::new(Algorithm::EdDSA));
+    let header = header.unwrap_or_else(|| Header::new(Algorithm::ES256));
     encode(&header, claims, encoding_key).map_err(|e| IssuerError::JwtEncodingError(e.to_string()))
 }
 
 // JWT検証の共通関数
 fn verify_jwt_with_key(token: &str, decoding_key: &DecodingKey) -> Result<Value, IssuerError> {
-    let validation = Validation::new(Algorithm::EdDSA);
+    let validation = Validation::new(Algorithm::ES256);
     let token_data = decode::<Value>(token, decoding_key, &validation)
         .map_err(|e| IssuerError::JwtDecodingError(e.to_string()))?;
     Ok(token_data.claims)
@@ -78,7 +80,7 @@ fn verify_jwt_with_key(token: &str, decoding_key: &DecodingKey) -> Result<Value,
 // アクセストークンの検証関数
 pub fn validate_access_token(token: &str) -> Result<(), IssuerError> {
     info!("Validating access token");
-    let decoding_key = get_decoding_key("ACCESS_TOKEN")?;
+    let decoding_key = get_decoding_key("ACCESS_TOKEN_p256")?;
     let token_data = verify_jwt_with_key(token, &decoding_key)?;
     debug!("Token successfully decoded: {:?}", token_data);
 
@@ -167,7 +169,7 @@ pub fn generate_credential(req: &CredentialRequest) -> Result<String, IssuerErro
         "credentialSubject": USER_DATA.clone()
     });
 
-    let encoding_key = get_encoding_key("CREDENTIAL_ISSUE")?;
+    let encoding_key = get_encoding_key("CREDENTIAL_ISSUE_p256")?;
     let jwt = generate_jwt(&credential, &encoding_key, None)?;
     info!("Credential generated successfully");
     Ok(jwt)
@@ -221,7 +223,8 @@ pub fn generate_sd_jwt_vc(
     verify_sd_jwt(&sd_jwt)?;
 
     // Key Binding JWTの生成
-    let key_binding_jwt = generate_optional_key_binding_jwt(jwk.as_ref(), &sd_jwt)?;
+    let _key_binding_jwt = generate_optional_key_binding_jwt(jwk.as_ref(), &sd_jwt)?;
+    let key_binding_jwt = None;
 
     Ok(SDJWTVerifiableCredential {
         sd_jwt,
@@ -246,10 +249,10 @@ pub fn _create_sdjwt_response(vc: &SDJWTVerifiableCredential) -> String {
 fn sign_sd_jwt(claims: &Value) -> Result<String, IssuerError> {
     let header = Header {
         typ: Some("vc+sd-jwt".to_string()),
-        alg: Algorithm::EdDSA,
+        alg: Algorithm::ES256,
         ..Default::default()
     };
-    let encoding_key = get_encoding_key("CREDENTIAL_ISSUE")?;
+    let encoding_key = get_encoding_key("CREDENTIAL_ISSUE_p256")?;
     generate_jwt(claims, &encoding_key, Some(header))
 }
 
@@ -274,14 +277,16 @@ fn process_selective_disclosures(
     Ok((disclosures, sd_hashes))
 }
 
+// 本番環境ではHolderが作成
 fn generate_key_binding_jwt(sd_jwt: &str) -> Result<String, IssuerError> {
     // SD-JWTのBase64URLエンコードされたJWT部分を抽出
-    let parts: Vec<&str> = sd_jwt.split('~').collect();
-    let jwt_part = parts.first().ok_or(IssuerError::InvalidSdJwtFormat)?;
+    // let parts: Vec<&str> = sd_jwt.split('~').collect();
+    // let jwt_part = parts.first().ok_or(IssuerError::InvalidSdJwtFormat)?;
 
     // SD-JWTのJWT部分をSHA-256でハッシュ化し、Base64URLエンコード
+    let base64_sd_jwt = general_purpose::URL_SAFE_NO_PAD.encode(sd_jwt);
     let mut hasher = Sha256::new();
-    hasher.update(jwt_part);
+    hasher.update(base64_sd_jwt);
     let sd_hash = general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
 
     // Key Binding JWTのペイロードを作成
@@ -292,8 +297,8 @@ fn generate_key_binding_jwt(sd_jwt: &str) -> Result<String, IssuerError> {
         "sd_hash": sd_hash
     });
 
-    // SD-JWTの発行時に利用したのと同じキーで署名
-    let encoding_key = get_encoding_key("CREDENTIAL_ISSUE")?;
+    // クライアントの秘密鍵で署名
+    let encoding_key = get_encoding_key("CLIENT_AUTH_p256")?;
     generate_jwt(&claims, &encoding_key, None)
 }
 
@@ -319,7 +324,7 @@ pub fn verify_sd_jwt(sd_jwt: &str) -> Result<Value, IssuerError> {
     let jwt = parts[0..3].join(".");
     let disclosures = &parts[3..];
 
-    let decoding_key = get_decoding_key("CREDENTIAL_ISSUE")?;
+    let decoding_key = get_decoding_key("CREDENTIAL_ISSUE_p256")?;
     let mut claims = verify_jwt_with_key(&jwt, &decoding_key)?;
 
     // ディスクロージャの処理
@@ -409,7 +414,7 @@ pub fn generate_access_token(
 
     let claims = create_access_token_claims(client_id, &scope, (now + expires_in).timestamp())?;
 
-    let encoding_key = get_encoding_key("ACCESS_TOKEN")?;
+    let encoding_key = get_encoding_key("ACCESS_TOKEN_p256")?;
     let access_token = generate_jwt(&claims, &encoding_key, None)
         .map_err(|e| IssuerError::AccessTokenGenerationError(e.to_string()))?;
     debug!("Generated Access Token: {}", access_token);
