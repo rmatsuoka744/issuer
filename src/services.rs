@@ -222,14 +222,9 @@ pub fn generate_sd_jwt_vc(
     // SD-JWT-VCの検証
     verify_sd_jwt(&sd_jwt)?;
 
-    // Key Binding JWTの生成
-    let _key_binding_jwt = generate_optional_key_binding_jwt(jwk.as_ref(), &sd_jwt)?;
-    let key_binding_jwt = None;
-
     Ok(SDJWTVerifiableCredential {
         sd_jwt,
         disclosures,
-        key_binding_jwt,
     })
 }
 
@@ -237,10 +232,6 @@ pub fn _create_sdjwt_response(vc: &SDJWTVerifiableCredential) -> String {
     let mut comp = vec![vc.sd_jwt.clone()];
     // disclosuresを追加
     comp.extend(vc.disclosures.clone());
-    // key_binding_jwtを追加（存在する場合）
-    if let Some(key_binding_jwt) = &vc.key_binding_jwt {
-        comp.push(key_binding_jwt.clone());
-    }
     // ~で連結
     comp.join("~")
 }
@@ -275,31 +266,6 @@ fn process_selective_disclosures(
 
     claims["_sd"] = serde_json::Value::Array(sd_hashes.clone());
     Ok((disclosures, sd_hashes))
-}
-
-// 本番環境ではHolderが作成
-fn generate_key_binding_jwt(sd_jwt: &str) -> Result<String, IssuerError> {
-    // SD-JWTのBase64URLエンコードされたJWT部分を抽出
-    // let parts: Vec<&str> = sd_jwt.split('~').collect();
-    // let jwt_part = parts.first().ok_or(IssuerError::InvalidSdJwtFormat)?;
-
-    // SD-JWTのJWT部分をSHA-256でハッシュ化し、Base64URLエンコード
-    let base64_sd_jwt = general_purpose::URL_SAFE_NO_PAD.encode(sd_jwt);
-    let mut hasher = Sha256::new();
-    hasher.update(base64_sd_jwt);
-    let sd_hash = general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
-
-    // Key Binding JWTのペイロードを作成
-    let claims = serde_json::json!({
-        "nonce": generate_salt(),
-        "aud": config::KEY_BINDING_AUD,
-        "iat": Utc::now().timestamp(),
-        "sd_hash": sd_hash
-    });
-
-    // クライアントの秘密鍵で署名
-    let encoding_key = get_encoding_key("CLIENT_AUTH_p256")?;
-    generate_jwt(&claims, &encoding_key, None)
 }
 
 fn generate_salt() -> String {
@@ -554,19 +520,4 @@ fn initialize_sd_jwt_vc_claims() -> Result<Value, IssuerError> {
     }
     claims["_sd_alg"] = Value::String("SHA-256".to_string());
     Ok(claims)
-}
-
-fn generate_optional_key_binding_jwt(
-    jwk_value: Option<&Value>,
-    sd_jwt: &str,
-) -> Result<Option<String>, IssuerError> {
-    if let Some(_jwk_value) = jwk_value {
-        debug!("Generating Key Binding JWT");
-        let key_binding_jwt = generate_key_binding_jwt(sd_jwt)
-            .map_err(|e| IssuerError::SdJwtVcGenerationError(e.to_string()))?;
-        Ok(Some(key_binding_jwt))
-    } else {
-        debug!("No jwk found. Skipping Key Binding JWT generation.");
-        Ok(None)
-    }
 }

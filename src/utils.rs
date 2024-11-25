@@ -10,8 +10,53 @@ use serde_json::json;
 
 use crate::models::CredentialRequest;
 
-/// PEM形式の公開鍵をJWK形式に変換 (returns jsonwebtoken::jwk::Jwk)
+/// PEM形式の公開鍵をJWK形式に変換（EdDSAまたはP-256をサポート）
 pub fn from_pem_to_jwk(pem: &str) -> Result<Jwk, String> {
+    debug!("Determining key type for PEM...");
+
+    // PEMのヘッダー/フッターを削除してBase64部分を抽出
+    let base64_data: String = pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+
+    // Base64デコード
+    let decoded = general_purpose::STANDARD
+        .decode(&base64_data)
+        .map_err(|e| format!("Failed to decode Base64: {}", e))?;
+
+    // キーの判定
+    if decoded.len() >= 44 && &decoded[0..2] == [0x30, 0x2a] {
+        debug!("Detected Ed25519 public key.");
+        return from_pem_to_jwk_eddsa(pem);
+    } else if decoded.len() >= 91 && &decoded[0..2] == [0x30, 0x59] {
+        debug!("Detected P-256 public key.");
+        return from_pem_to_jwk_p256(pem);
+    } else {
+        return Err("Unsupported key format. Could not detect Ed25519 or P-256.".into());
+    }
+}
+
+/// JWKオブジェクトをserde_json::Valueに変換（EdDSAまたはP-256をサポート）
+pub fn from_jwk_to_value(jwk: &Jwk) -> Result<String, String> {
+    debug!("Converting JWK to serde_json::Value...");
+
+    // 共通パラメータとアルゴリズムパラメータを判定
+    match &jwk.algorithm {
+        AlgorithmParameters::OctetKeyPair(_) => {
+            debug!("Detected Ed25519 key (OKP).");
+            from_jwk_to_value_eddsa(jwk)
+        }
+        AlgorithmParameters::EllipticCurve(_) => {
+            debug!("Detected P-256 key (EC).");
+            from_jwk_to_value_p256(jwk)
+        }
+        _ => Err("Unsupported algorithm parameters in JWK.".to_string()),
+    }
+}
+
+/// PEM形式の公開鍵をJWK形式に変換 (returns jsonwebtoken::jwk::Jwk)
+fn from_pem_to_jwk_eddsa(pem: &str) -> Result<Jwk, String> {
     debug!("Converting PEM to JWK...");
 
     // PEMのヘッダー/フッターを削除してBase64部分を抽出
@@ -76,7 +121,7 @@ pub fn from_pem_to_jwk(pem: &str) -> Result<Jwk, String> {
 }
 
 /// PEM形式のP-256公開鍵をJWK形式に変換
-pub fn from_pem_to_jwk_p256(pem: &str) -> Result<Jwk, String> {
+fn from_pem_to_jwk_p256(pem: &str) -> Result<Jwk, String> {
     // PEMのヘッダー/フッターを削除してBase64部分を抽出
     let base64_data: String = pem
         .lines()
@@ -184,7 +229,7 @@ pub fn from_jwk_to_pem(jwk: &Jwk) -> Result<String, String> {
 }
 
 /// JWKオブジェクトをserde_json::Valueに変換
-pub fn from_jwk_to_value(jwk: &Jwk) -> Result<String, String> {
+fn from_jwk_to_value_eddsa(jwk: &Jwk) -> Result<String, String> {
     debug!("Converting JWK to serde_json::Value...");
 
     // 共通パラメータとアルゴリズムパラメータの確認
@@ -241,7 +286,7 @@ pub fn from_jwk_to_value(jwk: &Jwk) -> Result<String, String> {
 }
 
 /// P-256専用: JWKオブジェクトをserde_json::Valueに変換
-pub fn from_jwk_to_value_p256(jwk: &Jwk) -> Result<String, String> {
+fn from_jwk_to_value_p256(jwk: &Jwk) -> Result<String, String> {
     debug!("Converting P-256 JWK to serde_json::Value...");
 
     // 共通パラメータとアルゴリズムパラメータの確認

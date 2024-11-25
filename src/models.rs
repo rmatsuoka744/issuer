@@ -27,7 +27,6 @@ pub struct W3CVerifiableCredential {
 pub struct SDJWTVerifiableCredential {
     pub sd_jwt: String,
     pub disclosures: Vec<String>,
-    pub key_binding_jwt: Option<String>,
 }
 
 #[derive(Serialize)]
