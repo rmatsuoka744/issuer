@@ -1,8 +1,8 @@
 use base64::engine::general_purpose::{self, STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine;
 use jsonwebtoken::jwk::{
-    AlgorithmParameters, CommonParameters, EllipticCurve, EllipticCurveKeyParameters, Jwk, OctetKeyPairParameters,
-    OctetKeyPairType, PublicKeyUse,
+    AlgorithmParameters, CommonParameters, EllipticCurve, EllipticCurveKeyParameters, Jwk,
+    OctetKeyPairParameters, OctetKeyPairType, PublicKeyUse,
 };
 use jsonwebtoken::{decode_header, DecodingKey};
 use log::debug;
@@ -172,7 +172,7 @@ fn from_pem_to_jwk_p256(pem: &str) -> Result<Jwk, String> {
 }
 
 /// JWK形式の公開鍵をPEM形式に変換
-pub fn from_jwk_to_pem(jwk: &Jwk) -> Result<String, String> {
+pub fn _from_jwk_to_pem(jwk: &Jwk) -> Result<String, String> {
     // 公開鍵を取得
     let (_kty, _crv, x) = {
         let common = &jwk.common;

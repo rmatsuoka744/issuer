@@ -5,7 +5,7 @@ use crate::models::{
     CredentialRequest, CredentialResponse, ErrorResponse, SDJWTVerifiableCredential, TokenRequest,
     TokenResponse, W3CVerifiableCredential,
 };
-use crate::user_data::USER_DATA;
+use crate::user_data::{MY_NUMBER, USER_DATA};
 use crate::utils;
 use actix_web::{HttpRequest, HttpResponse};
 use base64::{engine::general_purpose, Engine as _};
@@ -14,8 +14,10 @@ use jsonwebtoken::{
     decode, decode_header, encode, jwk, Algorithm, DecodingKey, EncodingKey, Header, Validation,
 };
 use log::{debug, error, info};
+use sdjwt::{Algorithm as SDJWTAlgorithm, Header as SDJWTHeader, Issuer, Jwk, KeyForEncoding};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::str::FromStr;
 use uuid::Uuid;
 
 // キー取得のヘルパー関数
@@ -53,7 +55,7 @@ pub fn generate_test_proof_jwt(jwk: &jwk::Jwk) -> Result<String, IssuerError> {
         "exp": expiration.timestamp()
     });
     let encoding_key = get_encoding_key("CLIENT_AUTH_p256")?;
-    let mut header = Header::new(Algorithm::ES256);
+    let mut header = Header::new(Algorithm::from_str(config::CREDENTIAL_KEYTYPE).unwrap());
     header.typ = Some("openid4vci-proof+jwt".to_string());
     header.jwk = Some(jwk.clone());
     generate_jwt(&claims, &encoding_key, Some(header))
@@ -65,13 +67,14 @@ fn generate_jwt(
     encoding_key: &EncodingKey,
     header: Option<Header>,
 ) -> Result<String, IssuerError> {
-    let header = header.unwrap_or_else(|| Header::new(Algorithm::ES256));
+    let header = header
+        .unwrap_or_else(|| Header::new(Algorithm::from_str(config::CREDENTIAL_KEYTYPE).unwrap()));
     encode(&header, claims, encoding_key).map_err(|e| IssuerError::JwtEncodingError(e.to_string()))
 }
 
 // JWT検証の共通関数
 fn verify_jwt_with_key(token: &str, decoding_key: &DecodingKey) -> Result<Value, IssuerError> {
-    let validation = Validation::new(Algorithm::ES256);
+    let validation = Validation::new(Algorithm::from_str(config::CREDENTIAL_KEYTYPE).unwrap());
     let token_data = decode::<Value>(token, decoding_key, &validation)
         .map_err(|e| IssuerError::JwtDecodingError(e.to_string()))?;
     Ok(token_data.claims)
@@ -123,13 +126,21 @@ pub fn validate_request(req: &CredentialRequest) -> Result<(), IssuerError> {
 
 // 所有証明の検証関数
 pub fn verify_proof_of_possession(body: &CredentialRequest) -> Result<(), IssuerError> {
+    // JWK からデコーディングキーを取得
     let decoding_key =
         utils::get_decoding_key_from_jwk(body).map_err(|_| IssuerError::InvalidProofKey)?;
 
-    let claims = verify_jwt_with_key(&body.proof.jwt, &decoding_key)?;
-    debug!("Proof JWT successfully verified: {:?}", claims);
+    // JWT の検証
+    let validation = Validation::new(Algorithm::from_str(config::CREDENTIAL_KEYTYPE).unwrap());
 
-    let nonce = claims
+    let token_data = decode::<Value>(&body.proof.jwt, &decoding_key, &validation)
+        .map_err(|e| IssuerError::JwtDecodingError(e.to_string()))?;
+
+    debug!("Proof JWT successfully verified: {:?}", token_data.claims);
+
+    // nonce の抽出と検証
+    let nonce = token_data
+        .claims
         .get("nonce")
         .and_then(|n| n.as_str())
         .ok_or(IssuerError::InvalidNonceInProof)?;
@@ -194,6 +205,86 @@ pub fn generate_credential(req: &CredentialRequest) -> Result<String, IssuerErro
     Ok(jwt)
 }
 
+/// 再帰的にパスを探索し、全てのパスを Vec<String> として返す
+fn flatten_json_keys(value: &Value, prefix: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+
+    match value {
+        Value::Object(map) => {
+            for (key, val) in map {
+                let full_key = if prefix.is_empty() {
+                    format!("/{}", key)
+                } else {
+                    format!("{}/{}", prefix, key)
+                };
+                paths.extend(flatten_json_keys(val, &full_key));
+            }
+        }
+        Value::Array(array) => {
+            for (index, val) in array.iter().enumerate() {
+                let full_key = format!("{}/{}", prefix, index);
+                paths.extend(flatten_json_keys(val, &full_key));
+            }
+        }
+        _ => {
+            // スカラー値の場合は現在のパスを追加
+            paths.push(prefix.to_string());
+        }
+    }
+
+    paths
+}
+
+/// 階層構造を持つフィールドから選択的開示用のパスを生成する
+fn get_selective_claims_paths(value: &Value) -> Vec<String> {
+    flatten_json_keys(value, "")
+}
+
+pub fn exp_generate_sd_jwt_vc(req: &CredentialRequest) -> Result<String, IssuerError> {
+    info!("Exp: Generating SD-JWT VC");
+
+    let mut header = SDJWTHeader::new(SDJWTAlgorithm::ES256);
+    header.typ = Some("application/example+sd-jwt".to_string());
+
+    let holder_jwk = Jwk::from_value(
+        extract_holder_public_key(req)
+            .unwrap()
+            .unwrap()
+            .get("jwk")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+    debug!("{:?}", holder_jwk);
+
+    let mut holder_claims = serde_json::json!({
+        "iss": config::CREDENTIAL_ISSUER,
+        "iat": Utc::now().timestamp(),
+        "vct": "https://credentials.example.com/identity_credential"
+    });
+    holder_claims
+        .as_object_mut()
+        .unwrap()
+        .extend(MY_NUMBER.as_object().unwrap().clone());
+
+    let selective_clamis: Vec<String> = get_selective_claims_paths(&MY_NUMBER);
+    
+    let credential_key_str = get_private_key_as_str("CREDENTIAL_ISSUE_p256").unwrap();
+    let credential_key_bytes = credential_key_str.as_bytes();
+    let encoding_key = KeyForEncoding::from_ec_pem(credential_key_bytes).unwrap();
+
+    let sdjwt = Issuer::new(holder_claims)
+        .unwrap()
+        .header(header)
+        .expires_in_seconds(1000)
+        .iter_disclosable(selective_clamis.iter())
+        .require_key_binding(holder_jwk)
+        .encode(&encoding_key)
+        .unwrap();
+
+    Ok(sdjwt)
+}
+
 // SD-JWT-VC生成関数
 pub fn generate_sd_jwt_vc(
     req: &CredentialRequest,
@@ -254,7 +345,7 @@ pub fn _create_sdjwt_response(vc: &SDJWTVerifiableCredential) -> String {
 fn sign_sd_jwt(claims: &Value) -> Result<String, IssuerError> {
     let header = Header {
         typ: Some("vc+sd-jwt".to_string()),
-        alg: Algorithm::ES256,
+        alg: Algorithm::from_str(config::CREDENTIAL_KEYTYPE).unwrap(),
         ..Default::default()
     };
     let encoding_key = get_encoding_key("CREDENTIAL_ISSUE_p256")?;

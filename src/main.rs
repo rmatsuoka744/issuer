@@ -16,22 +16,25 @@ async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("debug"));
     info!("Starting server");
 
-    let test_jwk_from_pem =
-        utils::from_pem_to_jwk(get_public_key_as_str("CLIENT_AUTH").unwrap().as_str()).unwrap();
-    info!("Test Jwk From CLIENT_PUBLIC Pem: {:?}", test_jwk_from_pem);
-    let test_jwk_from_pem_p256 = utils::from_pem_to_jwk(get_public_key_as_str("CLIENT_AUTH_p256").unwrap().as_str()).unwrap();
-    info!("Test p256 Jwk From CLIENT_PUBLIC Pem: {:?}", test_jwk_from_pem_p256);
-    let test_pem_from_jwk = utils::from_jwk_to_pem(&test_jwk_from_pem).unwrap();
-    info!("Test Pem From CLIENT_PUBLIC Jwk: {}", test_pem_from_jwk);
-    let test_value_from_jwk = utils::from_jwk_to_value(&test_jwk_from_pem).unwrap();
-    info!("Test Jwk Value: {}", test_value_from_jwk);
+    let test_jwk_from_pem_p256 =
+        utils::from_pem_to_jwk(get_public_key_as_str("CLIENT_AUTH_p256").unwrap().as_str())
+            .unwrap();
+    info!(
+        "Test p256 Jwk From CLIENT_PUBLIC Pem: {:?}",
+        test_jwk_from_pem_p256
+    );
     let test_value_from_jwk_p256 = utils::from_jwk_to_value(&test_jwk_from_pem_p256).unwrap();
     info!("Test Jwk Value_p256: {}", test_value_from_jwk_p256);
-    let credential_pub_jwk = utils::from_pem_to_jwk(get_public_key_as_str("CREDENTIAL_ISSUE_p256").unwrap().as_str()).unwrap();
+    let credential_pub_jwk = utils::from_pem_to_jwk(
+        get_public_key_as_str("CREDENTIAL_ISSUE_p256")
+            .unwrap()
+            .as_str(),
+    )
+    .unwrap();
     info!("Credential pub jwk: {:?}", credential_pub_jwk);
     let test_token = services::generate_test_access_token().unwrap();
     info!("Test Access Token: {}", test_token);
-    let test_proof_jwt = services::generate_test_proof_jwt(&test_jwk_from_pem).unwrap();
+    let test_proof_jwt = services::generate_test_proof_jwt(&test_jwk_from_pem_p256).unwrap();
     info!("Test Proof JWT: {}", test_proof_jwt);
     info!(
         "Metadata Endpoint: curl -X GET http://localhost:8080/.well-known/openid-credential-issuer"

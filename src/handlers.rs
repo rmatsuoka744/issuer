@@ -1,8 +1,7 @@
 use crate::errors::map_issuer_error_to_response;
 use crate::models::{CredentialRequest, IssuerMetadata, TokenRequest};
 use crate::services::{
-    extract_token, process_credential_request, process_token_request, validate_access_token,
-    validate_request, verify_proof_of_possession,
+    exp_generate_sd_jwt_vc, extract_token, process_credential_request, process_token_request, validate_access_token, validate_request, verify_proof_of_possession
 };
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use log::{debug, error, info};
@@ -14,6 +13,10 @@ pub async fn credential_endpoint(
 ) -> impl Responder {
     info!("Credential endpoint called");
     debug!("Received credential request: {:?}", body);
+
+    // Exp:
+    let exp_sd_jwt = exp_generate_sd_jwt_vc(&body).unwrap();
+    debug!("Experimental: {}", exp_sd_jwt);
 
     // アクセストークンの抽出
     let token = match extract_token(&req) {

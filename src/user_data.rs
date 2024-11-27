@@ -27,3 +27,18 @@ lazy_static! {
       "patient_id": "test_id"
     });
 }
+
+lazy_static! {
+  pub static ref MY_NUMBER: serde_json::Value = json!({
+      "given_name": "Taro",
+      "family_name": "Yamada",
+      "birthdate": "1985-05-15",
+      "address": {
+          "street_address": "1-1-1 Chiyoda", 
+          "locality": "Chiyoda-ku", 
+          "region": "Tokyo", 
+          "postal_code": "100-0001", 
+          "country": "JP"
+      }
+  });
+}
